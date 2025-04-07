@@ -52,7 +52,7 @@ from isaaclab.envs import (
 from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
 
 # Import extensions to set up environment tasks
-import CartPole.tasks  # noqa: F401
+import CartPole.tasks # noqa: F401
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -100,9 +100,10 @@ def main():
                     
                     # env stepping
                     next_obs, reward, terminated, truncated, _ = env.step(action)
-
                     done = terminated or truncated
                     obs = next_obs
+                    print(f"Reward : {reward}")
+                    print(f"obs.shape : {obs['policy'][0]}")
 
         if args_cli.video:
             timestep += 1

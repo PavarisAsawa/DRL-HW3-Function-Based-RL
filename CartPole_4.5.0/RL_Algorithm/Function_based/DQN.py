@@ -142,7 +142,7 @@ class DQN(BaseAlgorithm):
             with torch.no_grad():
                 return self.scale_action(self.policy_net(state).max(1).indices.view(1, 1))
         else:
-            return self.scale_action(random.randint(0, self.num_of_action))
+            return self.scale_action(random.randint(0, self.num_of_action-1))
                 
             
         # ====================================== #
@@ -162,7 +162,18 @@ class DQN(BaseAlgorithm):
             Tensor: Computed loss.
         """
         # ========= put your code here ========= #
-        pass
+        
+        # Compute Q(s_t, a) using Policy Network
+        q = self.policy_net(state_batch).gather(1, action_batch)
+        # Compute V(s_t+1) for all next states using Target Network
+        q_next = torch.zeros(state_batch.size(0), device=self.device)
+        if non_final_next_states.size(0) > 0:
+            q_next[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach() # Find maximum action value from non final state
+        expected_state_action_values = reward_batch + (self.discount_factor * q_next.unsqueeze(1))
+
+
+        loss = F.mse_loss(q, expected_state_action_values)
+        return loss
         # ====================================== #
 
     def generate_sample(self, batch_size):
@@ -199,7 +210,12 @@ class DQN(BaseAlgorithm):
         non_final_mask = torch.tensor([not done for done in _dones], device=self.device, dtype=torch.bool)
         # 6. Non-final next states
         non_final_next_states = next_states_batch[non_final_mask]
-        
+
+        # print (non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
+        # state dim : 
+        # reward dim : [batch , 1]
+        #   
+
         return (non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
         # ====================================== #
 
@@ -230,17 +246,20 @@ class DQN(BaseAlgorithm):
         """
         # Retrieve the state dictionaries (weights) of both networks
         # ========= put your code here ========= #
-        pass
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
         # ====================================== #
         
         # Apply the soft update rule to each parameter in the target network
         # ========= put your code here ========= #
-        pass
+        # for key in target_net_state_dict:
+        for key in target_net_state_dict:
+            target_net_state_dict[key] = self.tau * policy_net_state_dict[key] + (1.0 - self.tau) * target_net_state_dict[key]
         # ====================================== #
         
         # Load the updated weights into the target network
         # ========= put your code here ========= #
-        pass
+        self.target_net.load_state_dict(target_net_state_dict)
         # ====================================== #
 
     def learn(self, env):
@@ -257,7 +276,10 @@ class DQN(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        pass
+        obs = env.reset()
+        cumulative_reward = 0.0
+        done = False
+        step = 0
         # ====================================== #
 
         while not done:
