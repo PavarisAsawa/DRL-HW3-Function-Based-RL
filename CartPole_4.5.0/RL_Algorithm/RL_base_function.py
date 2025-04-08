@@ -6,6 +6,7 @@ import os
 import json
 import torch
 import torch.nn as nn
+import copy
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward' , 'done'))
@@ -29,7 +30,7 @@ class ReplayBuffer:
         self.memory = deque(maxlen=buffer_size)
         self.batch_size = batch_size
 
-    def add(self, state, action, reward, next_state, done):
+    def add(self, state, action, next_state, reward, done):
         """
         Adds an experience to the replay buffer.
 
@@ -40,9 +41,14 @@ class ReplayBuffer:
             next_state (Tensor): The next state resulting from the action.
             done (bool): Whether the episode has terminated.
         """
-        # action must is [[value]]
         self.memory.append(Transition(state, action, next_state, reward, done)) 
-        
+        # self.memory.append(Transition(
+        #     copy.deepcopy(state),
+        #     copy.deepcopy(action),
+        #     copy.deepcopy(next_state),
+        #     copy.deepcopy(reward),
+        #     copy.deepcopy(done)
+        # ))
 
     def sample(self):
         """
@@ -55,7 +61,9 @@ class ReplayBuffer:
             - next_state_batch: Batch of next states.
             - done_batch: Batch of terminal state flags.
         """
-        return random.sample(self.memory, self.batch_size)
+        a = random.sample(self.memory, self.batch_size)
+        # print(a)
+        return a
 
     def __len__(self):
         """
@@ -109,6 +117,8 @@ class BaseAlgorithm():
         self.q_values = defaultdict(lambda: np.zeros(self.num_of_action))
         self.n_values = defaultdict(lambda: np.zeros(self.num_of_action))
         self.training_error = []
+        self.rewards = []
+        self.episode_durations = []
 
         self.w = np.zeros((4, num_of_action))
         self.memory = ReplayBuffer(buffer_size, batch_size)
@@ -148,7 +158,7 @@ class BaseAlgorithm():
         Decay epsilon value to reduce exploration over time.
         """
         # ========= put your code here ========= #
-        self.epsilon = max(self.final_epsilon, self.epsilon*self.epsilon_decay)
+        self.epsilon = max(self.final_epsilon, self.epsilon-self.epsilon_decay)
         # ====================================== #
 
     def save_w(self, path, filename):
@@ -172,14 +182,36 @@ class BaseAlgorithm():
             self.w = np.load(filepath)
         # ====================================== #
 
-    def save_error(self, path, filename):
+    def save_loss(self, path, filename):
         """
-        Save weight parameters.
+        Save loss parameters.
         """
         # ========= put your code here ========= #
         if not os.path.exists(path):
             os.makedirs(path)
         filepath = os.path.join(path, filename)
         np.save(filepath, self.training_error)
+        # ====================================== #
+    
+    def save_reward(self, path, filename):
+        """
+        Save cumulative_reward parameters.
+        """
+        # ========= put your code here ========= #
+        if not os.path.exists(path):
+            os.makedirs(path)
+        filepath = os.path.join(path, filename)
+        np.save(filepath, self.rewards)
+        # ====================================== #
+        
+    def save_episode_duration(self, path, filename):
+        """
+        Save Episode Duration parameters.
+        """
+        # ========= put your code here ========= #
+        if not os.path.exists(path):
+            os.makedirs(path)
+        filepath = os.path.join(path, filename)
+        np.save(filepath, self.episode_durations)
         # ====================================== #
 

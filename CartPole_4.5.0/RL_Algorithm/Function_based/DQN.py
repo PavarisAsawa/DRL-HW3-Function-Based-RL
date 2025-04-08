@@ -12,6 +12,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import os
 
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward' , 'done'))
+
 class DQN_network(nn.Module):
     """
     Neural network model for the Deep Q-Network algorithm.
@@ -43,8 +46,7 @@ class DQN_network(nn.Module):
             Tensor: Q-value estimates for each action.
         """
         # ========= put your code here ========= #
-        val = x['policy']
-        
+        val = x
         # input layer
         val = F.relu(self.fc1(val))
         val = self.dropout(val)
@@ -99,7 +101,6 @@ class DQN(BaseAlgorithm):
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
 
-        self.episode_durations = []
         self.buffer_size = buffer_size
         self.batch_size = batch_size
 
@@ -140,9 +141,9 @@ class DQN(BaseAlgorithm):
         # ========= put your code here ========= #
         if np.random.rand() > self.epsilon:
             with torch.no_grad():
-                return self.scale_action(self.policy_net(state).max(1).indices.view(1, 1))
+                return self.policy_net(state).max(1).indices
         else:
-            return self.scale_action(random.randint(0, self.num_of_action-1))
+            return torch.tensor([random.randint(0, self.num_of_action-1)] , device=self.device)
                 
             
         # ====================================== #
@@ -164,16 +165,18 @@ class DQN(BaseAlgorithm):
         # ========= put your code here ========= #
         
         # Compute Q(s_t, a) using Policy Network
-        q = self.policy_net(state_batch).gather(1, action_batch)
+        q = self.policy_net(state_batch).gather(1, action_batch) # [batch_size, 1]
+
         # Compute V(s_t+1) for all next states using Target Network
-        q_next = torch.zeros(state_batch.size(0), device=self.device)
+        q_next = torch.zeros(size=(self.batch_size , self.num_of_action), device=self.device)
         if non_final_next_states.size(0) > 0:
-            q_next[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach() # Find maximum action value from non final state
-        expected_state_action_values = reward_batch + (self.discount_factor * q_next.unsqueeze(1))
+            q_next_values = self.target_net(non_final_next_states).detach()
+            q_next[non_final_mask.squeeze()] = q_next_values # Define Next Q value from next state , squeeze make dimension [batch_size , 1] to [batch_size]
+        q_expected = (torch.max(q_next , dim=1)[0].unsqueeze(1) * self.discount_factor) + reward_batch # Find Maximum Q Value over action : Dimension
 
-
-        loss = F.mse_loss(q, expected_state_action_values)
+        loss = F.mse_loss(q_expected,q)
         return loss
+
         # ====================================== #
 
     def generate_sample(self, batch_size):
@@ -190,33 +193,18 @@ class DQN(BaseAlgorithm):
         """
         # Ensure there are enough samples in memory before proceeding
         # sample for training with batch size
-        batch = self.memory.sample()        
-        
-        # ========= put your code here ========= #
-        
         if len(self.memory) < batch_size:
-            return None
-        _states, _actions, _next_states, _rewards, _dones = batch
-        
-        # 1. State batch
-        state_batch = torch.stack([torch.tensor(s['policy'], dtype=torch.float) for s in _states]).to(self.device)
-        # 2. Next state batch
-        next_states_batch = torch.stack([torch.tensor(s['policy'], dtype=torch.float) for s in _next_states]).to(self.device)
-        # 3. Action batch
-        action_batch = torch.stack(_actions).to(self.device)  # shape: [batch_size, 1]
-        # 4. Reward batch
-        reward_batch = torch.tensor(_rewards, dtype=torch.float, device=self.device).unsqueeze(1)
-        # 5. Non-final mask
-        non_final_mask = torch.tensor([not done for done in _dones], device=self.device, dtype=torch.bool)
-        # 6. Non-final next states
+            return
+        batch = self.memory.sample()         
+        # ========= put your code here ========= #)
+        state_batch = torch.stack([torch.tensor(batch[i].state, dtype=torch.float) for i in range(self.batch_size)]).to(self.device)
+        next_states_batch = torch.stack([torch.tensor(batch[i].next_state, dtype=torch.float) for i in range(self.batch_size)]).to(self.device)
+        action_batch = torch.stack([torch.tensor(batch[i].action, dtype=torch.int64) for i in range(self.batch_size)]).to(self.device)
+        reward_batch = torch.stack([torch.tensor(batch[i].reward, dtype=torch.float) for i in range(self.batch_size)]).to(self.device)
+        non_final_mask = torch.stack([torch.tensor(not batch[i].done, dtype=torch.bool) for i in range(self.batch_size)]).to(self.device)
         non_final_next_states = next_states_batch[non_final_mask]
-
-        # print (non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
-        # state dim : 
-        # reward dim : [batch , 1]
-        #   
-
-        return (non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
+        # Return All dimension : [batch_size , 1]
+        return (non_final_mask.unsqueeze(1), non_final_next_states.squeeze(1), state_batch.squeeze(1), action_batch, reward_batch.unsqueeze(1))
         # ====================================== #
 
     def update_policy(self):
@@ -231,7 +219,6 @@ class DQN(BaseAlgorithm):
         if sample is None:
             return
         non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch = sample
-        
         # Compute loss
         loss = self.calculate_loss(non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
 
@@ -240,7 +227,6 @@ class DQN(BaseAlgorithm):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
         return loss.item()
         # ====================================== #
 
@@ -289,13 +275,14 @@ class DQN(BaseAlgorithm):
         while not done:
             # Predict action from the policy network
             # ========= put your code here ========= #
-            action = self.select_action(obs)
+
+            action = self.select_action(obs[0]['policy'])
             # ====================================== #
 
             # Execute action in the environment and observe next state and reward
             # ========= put your code here ========= #
-            next_obs, reward, terminated, truncated, _ = env.step(action)
-            
+            next_obs, reward, terminated, truncated, _ = env.step(self.scale_action(action))
+
             reward_value = reward.item()
             terminated_value = terminated.item() 
             cumulative_reward += reward_value
@@ -304,20 +291,23 @@ class DQN(BaseAlgorithm):
 
             # Store the transition in memory
             # ========= put your code here ========= #
-            self.memory.add(obs, action, next_obs, reward, terminated)
+            self.memory.add(obs[0]['policy'], action, next_obs['policy'], reward_value, done)
             # ====================================== #
 
             # Update state
-            # Perform one step of the optimization (on the policy network)
-            self.update_policy()
+            # Perform one step of the optimization (on the policy network) and save training error
+            loss = self.update_policy()
+            self.training_error.append(loss)
             # Soft update of the target network's weights
             self.update_target_networks()
 
+
             # Decaying Epsilon
-            self.decay_epsilon()
             step += 1
+
             if done:
                 self.plot_durations(step)
+                self.rewards.append(cumulative_reward)
                 break
     
     def save_net_weights(self, path, filename):
@@ -334,7 +324,9 @@ class DQN(BaseAlgorithm):
         Load weight parameters.
         """
         self.policy_net.load_state_dict(torch.load(os.path.join(path, filename)))
+    
         # ====================================== #
+
     # Consider modifying this function to visualize other aspects of the training process.
     # ================================================================================== #
     def plot_durations(self, timestep=None, show_result=False):
