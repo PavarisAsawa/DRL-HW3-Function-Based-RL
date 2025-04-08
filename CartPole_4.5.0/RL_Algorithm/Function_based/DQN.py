@@ -10,6 +10,7 @@ from collections import namedtuple, deque
 import random
 import matplotlib
 import matplotlib.pyplot as plt
+import os
 
 class DQN_network(nn.Module):
     """
@@ -28,7 +29,7 @@ class DQN_network(nn.Module):
         self.fc2 = nn.Linear(hidden_size, hidden_size) # hidden layer
         self.fc3 = nn.Linear(hidden_size, n_actions) # output layer
         self.dropout = nn.Dropout(dropout)
-        pass
+        
         # ====================================== #
 
     def forward(self, x):
@@ -105,7 +106,6 @@ class DQN(BaseAlgorithm):
         # Experiment with different values and configurations to see how they affect the training process.
         # Remember to document any changes you make and analyze their impact on the agent's performance.
 
-        pass
         # ====================================== #
 
         super(DQN, self).__init__(
@@ -237,7 +237,11 @@ class DQN(BaseAlgorithm):
 
         # Perform gradient descent step
         # ========= put your code here ========= #
-        pass
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
         # ====================================== #
 
     def update_target_networks(self):
@@ -246,7 +250,7 @@ class DQN(BaseAlgorithm):
         """
         # Retrieve the state dictionaries (weights) of both networks
         # ========= put your code here ========= #
-        target_net_state_dict = self.target_net.state_dict()
+        target_net_state_dict = self.target_net.state_dict() # get target network weights
         policy_net_state_dict = self.policy_net.state_dict()
         # ====================================== #
         
@@ -285,32 +289,52 @@ class DQN(BaseAlgorithm):
         while not done:
             # Predict action from the policy network
             # ========= put your code here ========= #
-            pass
+            action = self.select_action(obs)
             # ====================================== #
 
             # Execute action in the environment and observe next state and reward
             # ========= put your code here ========= #
-            pass
+            next_obs, reward, terminated, truncated, _ = env.step(action)
+            
+            reward_value = reward.item()
+            terminated_value = terminated.item() 
+            cumulative_reward += reward_value
+            done = terminated or truncated
             # ====================================== #
 
             # Store the transition in memory
             # ========= put your code here ========= #
-            pass
+            self.memory.add(obs, action, next_obs, reward, terminated)
             # ====================================== #
 
             # Update state
-
             # Perform one step of the optimization (on the policy network)
             self.update_policy()
-
             # Soft update of the target network's weights
-            self.update_weights()
+            self.update_target_networks()
 
-            timestep += 1
+            # Decaying Epsilon
+            self.decay_epsilon()
+            step += 1
             if done:
-                self.plot_durations(timestep)
+                self.plot_durations(step)
                 break
-
+    
+    def save_net_weights(self, path, filename):
+        """
+        Save weight parameters.
+        """
+        if not os.path.exists(path):
+            os.makedirs(path)
+        filepath = os.path.join(path, filename)
+        torch.save(self.policy_net.state_dict(), filepath)
+        
+    def load_net_weights(self, path, filename):
+        """
+        Load weight parameters.
+        """
+        self.policy_net.load_state_dict(torch.load(os.path.join(path, filename)))
+        # ====================================== #
     # Consider modifying this function to visualize other aspects of the training process.
     # ================================================================================== #
     def plot_durations(self, timestep=None, show_result=False):
