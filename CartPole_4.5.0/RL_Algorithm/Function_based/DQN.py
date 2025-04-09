@@ -266,7 +266,7 @@ class DQN(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        obs = env.reset()
+        obs , _  = env.reset()
         cumulative_reward = 0.0
         done = False
         step = 0
@@ -276,7 +276,7 @@ class DQN(BaseAlgorithm):
             # Predict action from the policy network
             # ========= put your code here ========= #
 
-            action = self.select_action(obs[0]['policy'])
+            action = self.select_action(obs['policy'])
             # ====================================== #
 
             # Execute action in the environment and observe next state and reward
@@ -291,16 +291,19 @@ class DQN(BaseAlgorithm):
 
             # Store the transition in memory
             # ========= put your code here ========= #
-            self.memory.add(obs[0]['policy'], action, next_obs['policy'], reward_value, done)
+            self.memory.add(obs['policy'], action, next_obs['policy'], reward_value, done)
             # ====================================== #
-
+            
+            obs = next_obs
+            
             # Update state
             # Perform one step of the optimization (on the policy network) and save training error
             loss = self.update_policy()
             self.training_error.append(loss)
             # Soft update of the target network's weights
             self.update_target_networks()
-
+            
+            
 
             # Decaying Epsilon
             step += 1
