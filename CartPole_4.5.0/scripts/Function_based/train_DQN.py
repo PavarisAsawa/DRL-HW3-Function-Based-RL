@@ -114,6 +114,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # buffer_size = None
     # batch_size = None
 
+
     num_of_action: int = 11
     action_range: list = [-25, 25]
     n_observations: int = 4
@@ -151,6 +152,26 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
+    hparams = {
+    "num_of_action": num_of_action,
+    "action_range_min": action_range[0],
+    "action_range_max": action_range[1],
+    "hidden_dim": hidden_dim,
+    "dropout": dropout,
+    "learning_rate": learning_rate,
+    "tau": tau,
+    "initial_epsilon": initial_epsilon,
+    "epsilon_decay": epsilon_decay,
+    "final_epsilon": final_epsilon,
+    "discount": discount,
+    "buffer_size": buffer_size,
+    "batch_size": batch_size,
+    "n_episodes": n_episodes,
+    }
+    writer.add_hparams(hparams)
+
+
+
     agent = DQN(
         device=device,
         num_of_action=num_of_action,
@@ -163,6 +184,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         discount_factor = discount,
         buffer_size = buffer_size,
         batch_size = batch_size,
+        dropout=dropout,
+        n_observations=n_observations,
+        tau=tau
     )
 
     # reset environment
@@ -175,10 +199,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         
         for episode in tqdm(range(n_episodes)):
             agent.learn(env)
-            agent.decay_epsilon()
             
             writer.add_scalar("Reward/Episode", agent.rewards[-1], episode)
-            if agent.training_error and agent.training_error[-1] is not None:
+            if agent.training_error and agent.rewards[-1] is not None:
                 writer.add_scalar("Loss/Episode", agent.training_error[-1], episode)
             writer.add_scalar("Time/Episode", agent.episode_durations[-1], episode)
             writer.add_scalar("Epsilon/Episode", agent.epsilon, episode)

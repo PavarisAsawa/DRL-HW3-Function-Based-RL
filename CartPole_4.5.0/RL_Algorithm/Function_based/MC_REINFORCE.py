@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from RL_Algorithm.RL_base_function_approximation import BaseAlgorithm, ControlType
+from RL_Algorithm.RL_base_function import BaseAlgorithm
 
 
 import torch
@@ -12,6 +12,7 @@ from collections import namedtuple, deque
 import random
 import matplotlib
 import matplotlib.pyplot as plt
+import os
 
 class MC_REINFORCE_network(nn.Module):
     """
@@ -27,7 +28,10 @@ class MC_REINFORCE_network(nn.Module):
     def __init__(self, n_observations, hidden_size, n_actions, dropout):
         super(MC_REINFORCE_network, self).__init__()
         # ========= put your code here ========= #
-        pass
+        self.fc1 = nn.Linear(n_observations, hidden_size) # Input layer
+        self.fc2 = nn.Linear(hidden_size, n_actions) # hidden layer
+        self.softmax = nn.Softmax(dim=1)
+        self.dropout = nn.Dropout(dropout)
         # ====================================== #
 
     def forward(self, x):
@@ -41,7 +45,18 @@ class MC_REINFORCE_network(nn.Module):
             Tensor: Output tensor representing action probabilities.
         """
         # ========= put your code here ========= #
-        pass
+        # input layer to hidden
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        
+        # hidden layer to softmax
+        x = F.relu(self.fc2(x))
+        x = self.dropout(x)
+        
+
+        # softmax to output
+        x = self.softmax(x)
+        return x
         # ====================================== #
 
 class MC_REINFORCE(BaseAlgorithm):
@@ -107,11 +122,16 @@ class MC_REINFORCE(BaseAlgorithm):
             rewards (list): List of rewards obtained in the episode.
         
         Returns:
-            Tensor: Normalized stepwise returns.
+            Tensor: Normalized stepwise returns. # Dim = [1]
         """
-        # ========= put your code here ========= #
-        pass
-        # ====================================== #
+        stepwise_return = 0
+        stepwise_return_arr = []
+        for r in reversed(rewards):
+            stepwise_return = stepwise_return*self.discount_factor + r
+            stepwise_return_arr.append(stepwise_return)
+        tensor_norm = F.normalize(input=torch.tensor(list(reversed(stepwise_return_arr))),dim=0)
+        return tensor_norm.tolist() # > tensor([-0.1740, -0.1021, 0.3525,  0.4109,  0.4675,  0.5201])
+
 
     def generate_trajectory(self, env):
         """
@@ -121,7 +141,7 @@ class MC_REINFORCE(BaseAlgorithm):
             env: The environment object.
         
         Returns:
-            Tuple: (episode_return, stepwise_returns, log_prob_actions, trajectory)
+            Tuple: (timestep ,episode_return, stepwise_returns, log_prob_actions, trajectory)
         """
         # ===== Initialize trajectory collection variables ===== #
         # Reset environment to get initial state (tensor)
@@ -132,54 +152,74 @@ class MC_REINFORCE(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        pass
+        obs , _  = env.reset()
+        state_hist = []
+        reward_hist = []
+        action_hist = []
+        log_prob_action_hist = []
+        episode_return_hist = 0
+        timestep = 0
+        cumulative_reward = 0
+        done = False
         # ====================================== #
         
         # ===== Collect trajectory through agent-environment interaction ===== #
+        # In Episode
         while not done:
             
             # Predict action from the policy network
-            # ========= put your code here ========= #
-            pass
-            # ====================================== #
+            # State into policy to return probability of each action
+            prob_each_action = self.policy_net(obs['policy']) # > tensor([[0.1380, 0.1534, 0.1328, 0.1328, 0.1656, 0.1328, 0.1446]],device='cuda:0', grad_fn=<SoftmaxBackward0>)
+            # Change to Probability Distribution
+            prob_cat = torch.distributions.Categorical(prob_each_action) # > Categorical(probs: torch.Size([1, 7]))
+            action_idx = prob_cat.sample() # > tensor([1], device='cuda:0')
 
             # Execute action in the environment and observe next state and reward
-            # ========= put your code here ========= #
-            pass
-            # ====================================== #
+            next_obs, reward, terminated, truncated, _ = env.step(self.scale_action(action_idx))  # Step Environment
+            reward_value = reward.item() # > int : 1
+            terminated_value = terminated.item() 
+            cumulative_reward += reward_value
+            done = terminated or truncated
 
             # Store action log probability reward and trajectory history
-            # ========= put your code here ========= #
-            pass
-            # ====================================== #
+            reward_hist.append(reward_value)
+            state_hist.append(obs)
+            log_prob_action_hist.append(prob_cat.log_prob(action_idx)) # Collect in list and reduce dimension and change to list
             
             # Update state
-
+            obs = next_obs
             timestep += 1
             if done:
                 self.plot_durations(timestep)
                 break
+        self.decay_epsilon()
 
         # ===== Stack log_prob_actions &  stepwise_returns ===== #
-        # ========= put your code here ========= #
-        pass
-        # ====================================== #
+        stepwise_returns = self.calculate_stepwise_returns(rewards=reward_hist)
+        loss = self.calculate_loss(stepwise_returns=stepwise_returns , log_prob_actions=log_prob_action_hist).item()
+        self.training_error.append(loss)
+        self.episode_durations.append(timestep)
+        self.rewards.append(cumulative_reward)
+        return (cumulative_reward , stepwise_returns , log_prob_action_hist , state_hist)
     
     def calculate_loss(self, stepwise_returns, log_prob_actions):
         """
         Compute the loss for policy optimization.
-
         Args:
-            stepwise_returns (Tensor): Stepwise returns for the trajectory.
-            log_prob_actions (Tensor): Log probabilities of actions taken.
+            stepwise_returns (List): Stepwise returns for the trajectory. : Dim list = [n]
+            log_prob_actions (tensor): Log probabilities of actions taken. : Dim list = [n] : n is tensor contain with prob
         
         Returns:
             Tensor: Computed loss.
         """
-        # ========= put your code here ========= #
-        pass
-        # ====================================== #
-
+        loss = 0
+        # สมมุติว่า log_prob_actions กับ stepwise_returns มีความสัมพันธ์ 1-to-1
+        for t in range(len(log_prob_actions)):
+            loss += -(log_prob_actions[t] * stepwise_returns[t])
+            # loss += -sum(log_prob_actions[t]*stepwise_returns[t])
+        loss = loss/len(stepwise_returns)
+        return loss # > tensor(2.5966) : Scalar
+    
     def update_policy(self, stepwise_returns, log_prob_actions):
         """
         Update the policy using the calculated loss.
@@ -191,9 +231,11 @@ class MC_REINFORCE(BaseAlgorithm):
         Returns:
             float: Loss value after the update.
         """
-        # ========= put your code here ========= #
-        pass
-        # ====================================== #
+        loss = self.calculate_loss(stepwise_returns=stepwise_returns , log_prob_actions=log_prob_actions).unsqueeze(0) # get tensor loss value
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
     
     def learn(self, env):
         """
@@ -212,6 +254,20 @@ class MC_REINFORCE(BaseAlgorithm):
         return episode_return, loss, trajectory
         # ====================================== #
 
+    def save_net_weights(self, path, filename):
+        """
+        Save weight parameters.
+        """
+        if not os.path.exists(path):
+            os.makedirs(path)
+        filepath = os.path.join(path, filename)
+        torch.save(self.policy_net.state_dict(), filepath)
+        
+    def load_net_weights(self, path, filename):
+        """
+        Load weight parameters.
+        """
+        self.policy_net.load_state_dict(torch.load(os.path.join(path, filename)))
 
     # Consider modifying this function to visualize other aspects of the training process.
     # ================================================================================== #

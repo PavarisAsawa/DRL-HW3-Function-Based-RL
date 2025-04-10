@@ -116,11 +116,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     num_of_action: int = 11
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 64
+    hidden_dim: int = 128
     dropout: float = 0.5
     learning_rate: float = 0.01
     tau: float = 0.005
-    initial_epsilon: float = 1.0
+    initial_epsilon: float = 0.001
     epsilon_decay: float = 0.99
     final_epsilon: float = 0.001
     discount: float = 0.95
@@ -160,8 +160,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "DQN"
-    Experiment_name = "test"  
-    episode = 0
+    Experiment_name = "test_DQN"  
+    episode = 9999
     # q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
     # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
     # agent.load_w(full_path, q_value_file)
@@ -189,6 +189,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
                     done = terminated or truncated
                     obs = next_obs
+                
             
         if args_cli.video:
             timestep += 1

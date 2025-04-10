@@ -5,12 +5,14 @@
 import argparse
 import sys
 import os
+import wandb
+from torch.utils.tensorboard import SummaryWriter
 
 from isaaclab.app import AppLauncher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from RL_Algorithm.Function_based.DQN import DQN
+from RL_Algorithm.Function_based.MC_REINFORCE import *
 
 from tqdm import tqdm
 
@@ -100,18 +102,27 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ========================= Can be modified ========================== #
 
     # hyperparameters
-    num_of_action = None
-    action_range = [None, None]  
-    learning_rate = None
-    hidden_dim = None
-    n_episodes = None
-    initial_epsilon = None
-    epsilon_decay = None  
-    final_epsilon = None
-    discount = None
-    buffer_size = None
-    batch_size = None
+    # num_of_action = None
+    # action_range = [None, None]  
+    # learning_rate = None
+    # hidden_dim = None
+    # n_episodes = None
+    # initial_epsilon = None
+    # epsilon_decay = None  
+    # final_epsilon = None
+    # discount = None
+    # buffer_size = None
+    # batch_size = None
 
+
+    num_of_action: int = 7
+    action_range: list = [-25, 25]
+    n_observations: int = 4
+    hidden_dim: int = 32
+    dropout: float = 0.0
+    learning_rate: float = 0.01
+    discount: float = 0.95
+    n_episodes = 5000
 
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
@@ -130,20 +141,34 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print("device: ", device)
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "DQN"
+    Algorithm_name = "MC_REINFORCE"
+    experiment_name = "MC_REINFORCE_test"
+    fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
+    writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
+    
+    hparams = {
+    "num_of_action": num_of_action,
+    "action_range_min": action_range[0],
+    "action_range_max": action_range[1],
+    "hidden_dim": hidden_dim,
+    "dropout": dropout,
+    "learning_rate": learning_rate,
+    "discount": discount,
+    "n_episodes": n_episodes,
+    }
+    writer.add_hparams(hparams , {"dummy_metric": 0.0})
 
-    agent = DQN(
+
+
+    agent = MC_REINFORCE(
         device=device,
         num_of_action=num_of_action,
         action_range=action_range,
         learning_rate=learning_rate,
         hidden_dim=hidden_dim,
-        initial_epsilon = initial_epsilon,
-        epsilon_decay = epsilon_decay,
-        final_epsilon = final_epsilon,
         discount_factor = discount,
-        buffer_size = buffer_size,
-        batch_size = batch_size,
+        n_observations=n_observations,
+        dropout=dropout
     )
 
     # reset environment
@@ -155,16 +180,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            agent.learn(env)
+            cumulative_reward , stepwise_returns  , state_hist = agent.learn(env)
+            
+            writer.add_scalar("Reward/Episode", cumulative_reward, episode)
+            if agent.training_error and agent.rewards[-1] is not None:
+                writer.add_scalar("Loss/Episode", agent.training_error[-1], episode)
+            writer.add_scalar("Time/Episode", agent.episode_durations[-1], episode)
 
-        if episode % 100 == 0 or episode == n_episodes - 1:
-            print(agent.epsilon)
+            if episode % 100 == 0 or episode == n_episodes - 1:
+                print(agent.epsilon)
 
-            # Save Q-Learning agent
-            w_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
-            full_path = os.path.join(f"w/{task_name}", Algorithm_name)
-            agent.save_w(full_path, w_file)
-        
+            if (episode % 1000 == 0) or (episode == n_episodes - 1):
+                agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
+
+        # Save DQN agent
+        agent.save_net_weights(path=fullpath, filename="weight")
+        agent.save_reward(path=fullpath, filename="reward")
+        agent.save_episode_duration(path=fullpath, filename="duration")
+        agent.save_loss(path=fullpath, filename="loss")
+
         print('Complete')
         agent.plot_durations(show_result=True)
         plt.ioff()

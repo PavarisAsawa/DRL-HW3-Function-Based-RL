@@ -29,8 +29,7 @@ class DQN_network(nn.Module):
         super(DQN_network, self).__init__()
         # ========= put your code here ========= #
         self.fc1 = nn.Linear(n_observations, hidden_size) # Input layer
-        self.fc2 = nn.Linear(hidden_size, hidden_size) # hidden layer
-        self.fc3 = nn.Linear(hidden_size, n_actions) # output layer
+        self.fc2 = nn.Linear(hidden_size, n_actions) # hidden layer
         self.dropout = nn.Dropout(dropout)
         
         # ====================================== #
@@ -47,16 +46,16 @@ class DQN_network(nn.Module):
         """
         # ========= put your code here ========= #
         val = x
-        # input layer
+        # input layer to hidden
         val = F.relu(self.fc1(val))
         val = self.dropout(val)
         
-        # hidden layer
+        # hidden layer to output
         val = F.relu(self.fc2(val))
         val = self.dropout(val)
         
         # output layer
-        return self.fc3(val)
+        return val
         # ====================================== #
 
 class DQN(BaseAlgorithm):
@@ -312,6 +311,7 @@ class DQN(BaseAlgorithm):
                 self.plot_durations(step)
                 self.rewards.append(cumulative_reward)
                 break
+        self.decay_epsilon()
     
     def save_net_weights(self, path, filename):
         """
