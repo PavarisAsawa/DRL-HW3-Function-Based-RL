@@ -115,25 +115,25 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # batch_size = None
 
 
-    # num_of_action: int = 7
-    # action_range: list = [-25, 25]
-    # n_observations: int = 4
-    # hidden_dim: int = 32
-    # dropout: float = 0.0
-    # learning_rate: float = 0.01
-    # discount: float = 0.95
+    num_of_action: int = 7
+    action_range: list = [-25, 25]
+    n_observations: int = 4
+    hidden_dim: int = 32
+    dropout: float = 0.0
+    learning_rate: float = 0.01
+    discount: float = 0.95
     n_episodes = 5000
 
-    num_of_action: int = 2,
-    action_range: list = [-2.5, 2.5],
-    n_observations: int = 4,
-    hidden_dim = 256,
-    dropout = 0.05, 
-    learning_rate: float = 0.01,
-    tau: float = 0.005,
-    discount_factor: float = 0.95,
-    buffer_size: int = 256,
-    batch_size: int = 1,
+    # num_of_action: int = 2,
+    # action_range: list = [-2.5, 2.5],
+    # n_observations: int = 4,
+    # hidden_dim = 256,
+    # dropout = 0.05, 
+    # learning_rate: float = 0.01,
+    # tau: float = 0.005,
+    # discount_factor: float = 0.95,
+    # buffer_size: int = 256,
+    # batch_size: int = 1,
 
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
@@ -165,6 +165,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "dropout": dropout,
     "learning_rate": learning_rate,
     "n_episodes": n_episodes,
+    "discount": discount,
     }
     writer.add_hparams(hparams , {"dummy_metric": 0.0})
 
@@ -177,7 +178,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         learning_rate=learning_rate,
         hidden_dim=hidden_dim,
         n_observations=n_observations,
-        dropout=dropout
+        dropout=dropout,
+        discount_factor=discount
     )
 
     # reset environment

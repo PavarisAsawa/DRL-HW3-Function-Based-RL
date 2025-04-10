@@ -168,12 +168,20 @@ class DQN(BaseAlgorithm):
 
         # Compute V(s_t+1) for all next states using Target Network
         q_next = torch.zeros(size=(self.batch_size , self.num_of_action), device=self.device)
-        if non_final_next_states.size(0) > 0:
-            q_next_values = self.target_net(non_final_next_states).detach()
-            q_next[non_final_mask.squeeze()] = q_next_values # Define Next Q value from next state , squeeze make dimension [batch_size , 1] to [batch_size]
-        q_expected = (torch.max(q_next , dim=1)[0].unsqueeze(1) * self.discount_factor) + reward_batch # Find Maximum Q Value over action : Dimension
 
-        loss = F.mse_loss(q_expected,q)
+        # if non_final_next_states.size(0) > 0:
+        #     with torch.no_grad():
+        #         target_q_values = self.target_net(non_final_next_states)
+        #         q_next[non_final_mask.squeeze()] = torch.max(target_q_values, dim=1)[0]
+        # q_expected = reward_batch + self.discount_factor * q_next.max(1)[0].unsqueeze(1)
+        
+        if non_final_next_states.size(0) > 0:
+            with torch.no_grad():
+                q_next_values = self.target_net(non_final_next_states).detach()
+                q_next[non_final_mask.squeeze()] = q_next_values # Define Next Q value from next state , squeeze make dimension [batch_size , 1] to [batch_size]
+        q_expected = (torch.max(q_next , dim=1)[0].unsqueeze(1) * self.discount_factor) + reward_batch # Find Maximum Q Value over action : Dimension
+        
+        loss = F.mse_loss(target=q_expected,input=q) # tensor(0.6990, device='cuda:0', grad_fn=<MseLossBackward0>)
         return loss
 
         # ====================================== #
@@ -193,7 +201,7 @@ class DQN(BaseAlgorithm):
         # Ensure there are enough samples in memory before proceeding
         # sample for training with batch size
         if len(self.memory) < batch_size:
-            return
+            return None
         batch = self.memory.sample()         
         # ========= put your code here ========= #)
         state_batch = torch.stack([torch.tensor(batch[i].state, dtype=torch.float) for i in range(self.batch_size)]).to(self.device)
@@ -214,13 +222,14 @@ class DQN(BaseAlgorithm):
             float: Loss value after the update.
         """
         # Generate a sample batch
+        if self.memory.__len__() < self.batch_size:
+            return
         sample = self.generate_sample(self.batch_size)
         if sample is None:
             return
         non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch = sample
         # Compute loss
-        loss = self.calculate_loss(non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch)
-
+        loss = self.calculate_loss(non_final_mask, non_final_next_states, state_batch, action_batch, reward_batch) # tensor(0.7219, device='cuda:0', grad_fn=<MseLossBackward0>)
         # Perform gradient descent step
         # ========= put your code here ========= #
         self.optimizer.zero_grad()
@@ -297,6 +306,7 @@ class DQN(BaseAlgorithm):
             
             # Update state
             # Perform one step of the optimization (on the policy network) and save training error
+            
             loss = self.update_policy()
             self.training_error.append(loss)
             # Soft update of the target network's weights
@@ -312,6 +322,7 @@ class DQN(BaseAlgorithm):
                 self.rewards.append(cumulative_reward)
                 break
         self.decay_epsilon()
+        return cumulative_reward , step , loss
     
     def save_net_weights(self, path, filename):
         """

@@ -42,13 +42,6 @@ class ReplayBuffer:
             done (bool): Whether the episode has terminated.
         """
         self.memory.append(Transition(state, action, next_state, reward, done)) 
-        # self.memory.append(Transition(
-        #     copy.deepcopy(state),
-        #     copy.deepcopy(action),
-        #     copy.deepcopy(next_state),
-        #     copy.deepcopy(reward),
-        #     copy.deepcopy(done)
-        # ))
 
     def sample(self):
         """
@@ -128,7 +121,8 @@ class BaseAlgorithm():
         # Input obs : can be continuous value
         
         # ========= put your code here ========= #
-        obs_val = obs['policy'][0].detach().numpy()
+        
+        obs_val = obs['policy'][0].detach().cpu().numpy()
         if a==None:
             # Get q values from all action in state
             return np.dot(obs_val, self.w)

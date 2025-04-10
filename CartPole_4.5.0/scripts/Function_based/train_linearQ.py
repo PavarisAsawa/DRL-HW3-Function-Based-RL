@@ -10,7 +10,8 @@ from isaaclab.app import AppLauncher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from RL_Algorithm.Function_based.DQN import DQN
+from RL_Algorithm.Function_based.Linear_Q import *
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 
@@ -100,17 +101,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ========================= Can be modified ========================== #
 
     # hyperparameters
-    num_of_action = None
-    action_range = [None, None]  
-    learning_rate = None
-    hidden_dim = None
-    n_episodes = None
-    initial_epsilon = None
-    epsilon_decay = None  
-    final_epsilon = None
-    discount = None
-    buffer_size = None
-    batch_size = None
+
+    num_of_action: int = 7
+    action_range: list = [-25, 25]
+    learning_rate = 0.01
+    initial_epsilon: float = 1.0
+    epsilon_decay: float = 0.0003
+    final_epsilon: float = 0.001
+    discount = 0.95
+    n_observations: int = 4
+    n_episodes = 5000
 
 
     # set up matplotlib
@@ -130,20 +130,33 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print("device: ", device)
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "DQN"
+    Algorithm_name = "Linear_Q"
+    experiment_name = "Linear_Q_base"
+    fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
 
-    agent = DQN(
-        device=device,
+    fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
+    writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
+    hparams = {
+        "num_of_action": num_of_action,
+        "action_range_min": action_range[0],
+        "action_range_max": action_range[1],
+        "learning_rate": learning_rate,
+        "initial_epsilon": initial_epsilon,
+        "epsilon_decay": epsilon_decay,
+        "final_epsilon": final_epsilon,
+        "discount": discount,
+        "n_episodes": n_episodes,
+    }
+    writer.add_hparams(hparams,{"dummy_metric": 0.0})
+
+    agent = Linear_QN(
         num_of_action=num_of_action,
         action_range=action_range,
         learning_rate=learning_rate,
-        hidden_dim=hidden_dim,
         initial_epsilon = initial_epsilon,
         epsilon_decay = epsilon_decay,
         final_epsilon = final_epsilon,
         discount_factor = discount,
-        buffer_size = buffer_size,
-        batch_size = batch_size,
     )
 
     # reset environment
@@ -155,16 +168,21 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            agent.learn(env)
+            cumulative_reward , step = agent.learn(env)
+
+            writer.add_scalar("Reward/Episode", cumulative_reward, episode)
+            writer.add_scalar("Time/Episode", step, episode)
+            writer.add_scalar("Epsilon/Episode", agent.epsilon, episode)
 
         if episode % 100 == 0 or episode == n_episodes - 1:
             print(agent.epsilon)
+        if (episode % 1000 == 0) or (episode == n_episodes - 1):
+                agent.save_w(fullpath, f"weight_{episode}")
 
-            # Save Q-Learning agent
-            w_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
-            full_path = os.path.join(f"w/{task_name}", Algorithm_name)
-            agent.save_w(full_path, w_file)
-        
+        agent.save_w(fullpath, "weight")
+        agent.save_reward(path=fullpath, filename="reward")
+        agent.save_episode_duration(path=fullpath, filename="duration")
+
         print('Complete')
         agent.plot_durations(show_result=True)
         plt.ioff()

@@ -6,11 +6,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
+import os
+
 from torch.distributions.normal import Normal
 from torch.nn.functional import mse_loss
 from RL_Algorithm.RL_base_function import BaseAlgorithm
 
-class Actor(nn.Module):
+class ActorCritic(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, learning_rate=1e-4):
         """
         Actor network for policy approximation.
@@ -21,13 +24,17 @@ class Actor(nn.Module):
             output_dim (int): Dimension of the action space.
             learning_rate (float, optional): Learning rate for optimization. Defaults to 1e-4.
         """
-        super(Actor, self).__init__()
+        super(ActorCritic, self).__init__()
 
-        # ========= put your code here ========= #
-        self.fc1 = nn.Linear(input_dim, hidden_dim) # Input layer
-        self.fc2 = nn.Linear(hidden_dim, output_dim) # hidden layer
+        self.fc1 = nn.Linear(input_dim, hidden_dim) # Input to hidden layer
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim) # hidden to hidden layer
+        
+        self.actor_head = nn.Linear(hidden_dim, output_dim) # hidden layer
+        self.critic_head = nn.Linear(hidden_dim , 1)
+        
+        self.softmax = nn.Softmax(dim=1)
+
         self.init_weights()
-        # ====================================== #
 
     def init_weights(self):
         """
@@ -47,65 +54,14 @@ class Actor(nn.Module):
         Returns:
             Tensor: Selected action values.
         """
-        # ========= put your code here ========= #
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        action_probs = torch.softmax(self.fc3(x), dim=-1)  # Output is a probability distribution over actions
-        return action_probs
-        # ====================================== #
 
-class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim, learning_rate=1e-4):
-        """
-        Critic network for Q-value approximation.
+        actor_out = F.relu(self.actor_head(x))
+        actor_prob = self.softmax(actor_out)
+        critic_out = self.critic_head(x)
 
-        Args:
-            state_dim (int): Dimension of the state space.
-            action_dim (int): Dimension of the action space.
-            hidden_dim (int): Number of hidden units in layers.
-            learning_rate (float, optional): Learning rate for optimization. Defaults to 1e-4.
-        """
-        super(Critic, self).__init__()
-
-        # ========= put your code here ========= #
-        self.fc1 = nn.Linear(state_dim, hidden_dim) # Input layer
-        self.fc2 = nn.Linear(hidden_dim, action_dim) # hidden layer
-        self.init_weights()
-        # ====================================== #
-
-    def init_weights(self):
-        """
-        Initialize network weights using Kaiming initialization.
-        """
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')  # Kaiming initialization
-                nn.init.zeros_(m.bias)  # Initialize bias to 0
-
-    def forward(self, state, action):
-        """
-        Forward pass for Q-value estimation.
-
-        Args:
-            state (Tensor): Current state of the environment. [[n,m,k,j]]
-            action (Tensor): Action taken by the agent. [[]]
-
-        Returns:
-            Tensor: Estimated Q-value.
-        """
-        # ========= put your code here ========= #
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        
-        # hidden layer to softmax
-        x = F.relu(self.fc2(x))
-        x = self.dropout(x)
-        
-
-        # softmax to output
-        x = self.softmax(x)
-        return x
-        # ====================================== #
+        return actor_prob , critic_out
 
 class PPO(BaseAlgorithm):
     def __init__(self, 
@@ -139,10 +95,7 @@ class PPO(BaseAlgorithm):
         # Feel free to add or modify any of the initialized variables above.
         # ========= put your code here ========= #
         self.device = device
-        self.actor = Actor(n_observations, hidden_dim, num_of_action, learning_rate).to(device)
-        self.actor_target = Actor(n_observations, hidden_dim, num_of_action, learning_rate).to(device)
-        self.critic = Critic(n_observations, num_of_action, hidden_dim, learning_rate).to(device)
-        self.critic_target = Critic(n_observations, num_of_action, hidden_dim, learning_rate).to(device)
+        self.actor_critic = ActorCritic(n_observations, hidden_dim, num_of_action, learning_rate).to(device)
         self.batch_size = batch_size
         self.tau = tau
         self.update_target_networks(tau=1)  # initialize target networks
@@ -161,25 +114,47 @@ class PPO(BaseAlgorithm):
             batch_size=batch_size,
         )
 
-    def select_action(self, state, noise=0.0):
+    def select_action(self, prob_each_action, noise=0.0) -> int:
         """
         Selects an action based on the current policy with optional exploration noise.
         
         Args:
-        state (Tensor): The current state of the environment.
+        state (Tensor): The current state of the environment. [[n1,n2,n3,n4,..nn]]
         noise (float, optional): The standard deviation of noise for exploration. Defaults to 0.0.
 
         Returns:
             Tuple[Tensor, Tensor]: 
                 - scaled_action: The final action after scaling.
-                - clipped_action: The action before scaling but after noise adjustment.
+            Tensor:
+                - Probabiblity from action : dim : tensor([n])
         """
-        prob_each_action = self.actor(state=state) # > tensor([[0.1380, 0.1534, 0.1328, 0.1328, 0.1656, 0.1328, 0.1446]],device='cuda:0', grad_fn=<SoftmaxBackward0>)
         # Change to Probability Distribution
         prob_cat = torch.distributions.Categorical(prob_each_action) # > Categorical(probs: torch.Size([1, 7]))
         action_idx = prob_cat.sample() # > tensor([1], device='cuda:0')
-        return action_idx
+        return action_idx , prob_cat.probs[0][action_idx]
     
+    def calculate_stepwise_returns(self, rewards):
+        """
+        Compute stepwise returns for the trajectory.
+
+        Args:
+            rewards (list): List of rewards obtained in the episode.
+        
+        Returns:
+            Tensor: Normalized stepwise returns. # Dim = [1]
+        """
+        stepwise_return = 0
+        stepwise_return_arr = []
+        for r in reversed(rewards):
+            stepwise_return = stepwise_return*self.discount_factor + r
+            stepwise_return_arr.append(stepwise_return)
+        tensor_norm = F.normalize(input=torch.tensor(list(reversed(stepwise_return_arr))),dim=0)
+        return tensor_norm # > tensor([-0.1740, -0.1021, 0.3525,  0.4109,  0.4675,  0.5201])
+    
+    def calculate_advantage(self , rewards , values):
+        stepwise_return = self.calculate_stepwise_returns(rewards = rewards)
+        pass
+
     def generate_sample(self, batch_size):
         """
         Generates a batch sample from memory for training.
@@ -264,8 +239,42 @@ class PPO(BaseAlgorithm):
         # ========= put your code here ========= #
         pass
         # ====================================== #
+    def generate_trajectory(self , env):
+        obs , _  = env.reset()
+        state_hist = []
+        reward_hist = []
+        action_hist = []
+        timestep = 0
+        cumulative_reward = 0
+        done = False
+        # ====================================== #
 
-    def learn(self, env, max_steps, num_agents, noise_scale=0.1, noise_decay=0.99):
+        while not done:
+            # Predict action from the policy network
+            prob_each_action , v_value = self.actor_critic(obs['policy'])
+            action_idx , action_prob = self.select_action(prob_each_action=prob_each_action) # > tensor([4], device='cuda:0')
+            # Execute action in the environment and observe next state and reward
+            next_obs, reward, terminated, truncated, _ = env.step(self.scale_action(action_idx.item()))  # Step Environment
+            reward_value = reward.item() # > int : 1
+            terminated_value = terminated.item() 
+            cumulative_reward += reward_value
+            done = terminated or truncated
+
+            # Store the transition in memory
+            self.memory.add(state=obs,action=action_idx,next_state=next_obs,reward=reward_value,done=done)
+
+            # ====================================== #
+
+            # Update state
+            obs = next_obs
+            timestep += 1
+            if done:
+                self.plot_durations(timestep)
+                break
+        self.calculate_advantage()
+        return 0
+
+    def learn(self, env, max_steps=0, num_agents=1, noise_scale=0.1, noise_decay=0.99):
         """
         Train the agent on a single step.
 
@@ -283,44 +292,7 @@ class PPO(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        obs , _  = env.reset()
-        state_hist = []
-        reward_hist = []
-        action_hist = []
-        log_prob_action_hist = []
-        episode_return_hist = 0
-        timestep = 0
-        cumulative_reward = 0
-        done = False
-        # ====================================== #
-
-        while not done:
-            # Predict action from the policy network
-            prob_each_action = self.actor(obs['policy'])
-            print(prob_each_action)
-            # Execute action in the environment and observe next state and reward
-
-            # Store the transition in memory
-            # ========= put your code here ========= #
-            # Parallel Agents Training
-            if num_agents > 1:
-                pass
-            # Single Agent Training
-            else:
-                pass
-            # ====================================== #
-
-            # Update state
-
-            # Decay the noise to gradually shift from exploration to exploitation
-
-
-            # Perform one step of the optimization (on the policy network)
-            # self.update_policy()
-
-            # Update target networks
-            # self.update_target_networks()
-        return 0
+        self.generate_trajectory(env=env)
 
     def save_net_weights(self, path, filename):
         """
@@ -329,10 +301,40 @@ class PPO(BaseAlgorithm):
         if not os.path.exists(path):
             os.makedirs(path)
         filepath = os.path.join(path, filename)
-        torch.save(self.policy_net.state_dict(), filepath)
+        torch.save(self.actor_critic.state_dict(), filepath)
         
     def load_net_weights(self, path, filename):
         """
         Load weight parameters.
         """
-        self.policy_net.load_state_dict(torch.load(os.path.join(path, filename)))
+        self.actor_critic.load_state_dict(torch.load(os.path.join(path, filename)))
+
+    # ================================================================================== #
+    def plot_durations(self, timestep=None, show_result=False):
+        if timestep is not None:
+            self.episode_durations.append(timestep)
+
+        plt.figure(1)
+        durations_t = torch.tensor(self.episode_durations, dtype=torch.float)
+        if show_result:
+            plt.title('Result')
+        else:
+            plt.clf()
+            plt.title('Training...')
+        plt.xlabel('Episode')
+        plt.ylabel('Duration')
+        plt.plot(durations_t.numpy())
+        # Take 100 episode averages and plot them too
+        if len(durations_t) >= 100:
+            means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+            means = torch.cat((torch.zeros(99), means))
+            plt.plot(means.numpy())
+
+        plt.pause(0.001)  # pause a bit so that plots are updated
+        if self.is_ipython:
+            if not show_result:
+                display.display(plt.gcf())
+                display.clear_output(wait=True)
+            else:
+                display.display(plt.gcf())
+    # ================================================================================== #

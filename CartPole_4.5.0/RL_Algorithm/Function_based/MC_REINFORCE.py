@@ -192,7 +192,6 @@ class MC_REINFORCE(BaseAlgorithm):
             if done:
                 self.plot_durations(timestep)
                 break
-        self.decay_epsilon()
 
         # ===== Stack log_prob_actions &  stepwise_returns ===== #
         stepwise_returns = self.calculate_stepwise_returns(rewards=reward_hist)

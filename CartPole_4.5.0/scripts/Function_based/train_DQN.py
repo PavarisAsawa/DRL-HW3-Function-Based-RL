@@ -115,20 +115,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # batch_size = None
 
 
-    num_of_action: int = 11
+    num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 128
+    hidden_dim: int = 32
     dropout: float = 0.0
-    learning_rate: float = 0.0001
+    learning_rate: float = 0.01
     tau: float = 0.005
     initial_epsilon: float = 1.0
-    epsilon_decay: float = 0.0002
+    epsilon_decay: float = 0.0003
     final_epsilon: float = 0.001
     discount: float = 0.95
     buffer_size: int = 1000
     batch_size: int = 128
-    n_episodes = 10000
+    n_episodes = 5000
 
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
@@ -148,7 +148,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "DQN"
-    experiment_name = "test_DQN"
+    experiment_name = "DQN_dump"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
@@ -168,7 +168,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "batch_size": batch_size,
     "n_episodes": n_episodes,
     }
-    writer.add_hparams(hparams)
+    writer.add_hparams(hparams,{"dummy_metric": 0.0})
 
 
 
@@ -198,12 +198,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            agent.learn(env)
-            
-            writer.add_scalar("Reward/Episode", agent.rewards[-1], episode)
-            if agent.training_error and agent.rewards[-1] is not None:
-                writer.add_scalar("Loss/Episode", agent.training_error[-1], episode)
-            writer.add_scalar("Time/Episode", agent.episode_durations[-1], episode)
+            cumulative_reward , step , loss = agent.learn(env)
+            if loss is None:
+                loss = 0
+            writer.add_scalar("Loss/Episode", loss, episode)
+            writer.add_scalar("Reward/Episode", cumulative_reward, episode)
+            writer.add_scalar("Time/Episode", step, episode)
             writer.add_scalar("Epsilon/Episode", agent.epsilon, episode)
 
             if episode % 100 == 0 or episode == n_episodes - 1:

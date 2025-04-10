@@ -58,7 +58,7 @@ class Linear_QN(BaseAlgorithm):
 
         """
         # ========= put your code here ========= #
-        q_curr = self.q(obs=obs, action=action)
+        q_curr = self.q(obs=obs, a=action)
         if terminated:
             target = reward
         else:
@@ -68,7 +68,7 @@ class Linear_QN(BaseAlgorithm):
         error = target - q_curr
         self.training_error.append(error)
         # Gradient descent update
-        self.w[:, action] += self.lr * error * obs['policy'][0].detach().numpy()
+        self.w[:, action] += self.lr * error * obs['policy'][0].detach().cpu().numpy()
         # ====================================== #
 
     def select_action(self, state):
@@ -90,7 +90,7 @@ class Linear_QN(BaseAlgorithm):
             return np.argmax(self.q(state))
         # ====================================== #
 
-    def learn(self, env, max_steps):
+    def learn(self, env):
         """
         Train the agent on a single step.
 
@@ -105,12 +105,12 @@ class Linear_QN(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        obs = env.reset()
+        obs, _ = env.reset()
         cumulative_reward = 0.0
         done = False
         step = 0
         
-        while not done and step < max_steps:
+        while not done:
             # agent stepping
             action = self.select_action(obs)
              
@@ -135,6 +135,8 @@ class Linear_QN(BaseAlgorithm):
             done = terminated or truncated
             obs = next_obs
             step += 1
+        self.decay_epsilon()
+        return cumulative_reward , step
         # ====================================== #
     
 
