@@ -120,14 +120,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     n_observations: int = 4
     hidden_dim: int = 32
     dropout: float = 0.0
-    learning_rate: float = 0.01
+    learning_rate: float = 0.001
     tau: float = 0.005
     initial_epsilon: float = 1.0
-    epsilon_decay: float = 0.0003
+    epsilon_decay: float = 0.00025
     final_epsilon: float = 0.001
     discount: float = 0.95
     buffer_size: int = 1000
-    batch_size: int = 128
+    batch_size: int = 256
     n_episodes = 5000
 
     # set up matplotlib
@@ -147,8 +147,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print("device: ", device)
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
+    
     Algorithm_name = "DQN"
-    experiment_name = "DQN_dump"
+    experiment_name = "DQN_2"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 

@@ -114,13 +114,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # buffer_size = None
     # batch_size = None
 
+    # Reinforcement_test
+    # num_of_action: int = 7
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 32
+    # dropout: float = 0.0
+    # learning_rate: float = 0.01
+    # discount: float = 0.95
+    # n_episodes = 5000
 
+    # MC_REINFORCE_1
     num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 32
-    dropout: float = 0.0
-    learning_rate: float = 0.01
+    hidden_dim: int = 128
+    dropout: float = 0.5
+    learning_rate: float = 0.001
     discount: float = 0.95
     n_episodes = 5000
 
@@ -142,7 +152,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "MC_REINFORCE"
-    experiment_name = "MC_REINFORCE_test"
+    experiment_name = "MC_REINFORCE_1"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
     

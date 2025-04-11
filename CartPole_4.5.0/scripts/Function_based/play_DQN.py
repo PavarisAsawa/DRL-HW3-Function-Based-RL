@@ -113,15 +113,30 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # buffer_size = None
     # batch_size = None
     
-    num_of_action: int = 11
+    # num_of_action: int = 11
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 128
+    # dropout: float = 0.5
+    # learning_rate: float = 0.01
+    # tau: float = 0.005
+    # initial_epsilon: float = 0.001
+    # epsilon_decay: float = 0.99
+    # final_epsilon: float = 0.001
+    # discount: float = 0.95
+    # buffer_size: int = 1000
+    # batch_size: int = 128
+    # n_episodes = 10000
+
+    num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
     hidden_dim: int = 128
-    dropout: float = 0.5
-    learning_rate: float = 0.01
+    dropout: float = 0.0
+    learning_rate: float = 0.001
     tau: float = 0.005
     initial_epsilon: float = 0.001
-    epsilon_decay: float = 0.99
+    epsilon_decay: float = 0.0003
     final_epsilon: float = 0.001
     discount: float = 0.95
     buffer_size: int = 1000
@@ -156,17 +171,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         discount_factor = discount,
         buffer_size = buffer_size,
         batch_size = batch_size,
+        n_observations=n_observations
     )
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "DQN"
-    Experiment_name = "test_DQN"  
+    Experiment_name = "DQN_dump"  
     episode = 9999
     # q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
     # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
     # agent.load_w(full_path, q_value_file)
     fullpath = f"experiments/{Algorithm_name}/{Experiment_name}"
-    agent.load_net_weights(path=fullpath,filename="weight")
+    agent.load_net_weights(path=fullpath,filename="weight_1000")
 
     # reset environment
     obs, _ = env.reset()
