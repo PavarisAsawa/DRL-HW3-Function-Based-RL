@@ -6,6 +6,7 @@ import argparse
 import sys
 import os
 import wandb
+import json
 from torch.utils.tensorboard import SummaryWriter
 
 from isaaclab.app import AppLauncher
@@ -114,7 +115,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # buffer_size = None
     # batch_size = None
 
-    # Reinforcement_test
+    # Reinforcement_base
     # num_of_action: int = 7
     # action_range: list = [-25, 25]
     # n_observations: int = 4
@@ -125,12 +126,32 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # n_episodes = 5000
 
     # MC_REINFORCE_1
+    # num_of_action: int = 7
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 128
+    # dropout: float = 0.5
+    # learning_rate: float = 0.001
+    # discount: float = 0.95
+    # n_episodes = 5000
+
+    # MC_REINFORCE_2
+    # num_of_action: int = 7
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 32
+    # dropout: float = 0.0
+    # learning_rate: float = 0.001
+    # discount: float = 0.95
+    # n_episodes = 5000
+
+    # MC_REINFORCE_3
     num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 128
-    dropout: float = 0.5
-    learning_rate: float = 0.001
+    hidden_dim: int = 32
+    dropout: float = 0.0
+    learning_rate: float = 0.005
     discount: float = 0.95
     n_episodes = 5000
 
@@ -152,11 +173,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "MC_REINFORCE"
-    experiment_name = "MC_REINFORCE_1"
+    experiment_name = "MC_REINFORCE_3"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
     
-    hparams = {
+    hyperparam = {
     "num_of_action": num_of_action,
     "action_range_min": action_range[0],
     "action_range_max": action_range[1],
@@ -165,9 +186,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "learning_rate": learning_rate,
     "discount": discount,
     "n_episodes": n_episodes,
+    "describe" : "like a base but reduce little bit LR"
     }
-    writer.add_hparams(hparams , {"dummy_metric": 0.0})
-
 
 
     agent = MC_REINFORCE(
@@ -208,6 +228,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_reward(path=fullpath, filename="reward")
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
+        #------------------------------------------------------------#
+        # Dump Hyperparam
+        os.makedirs(fullpath, exist_ok=True)
+        # Save the JSON file
+        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+            json.dump(hyperparam, f, indent=4)
+        #------------------------------------------------------------#
 
         print('Complete')
         agent.plot_durations(show_result=True)

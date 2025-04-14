@@ -57,7 +57,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-
+import json
 
 from isaaclab.envs import (
     DirectMARLEnv,
@@ -148,22 +148,55 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # buffer_size: int = 1000
     # batch_size: int = 128
     # n_episodes = 5000
+    
+    # DQN_2
+    # num_of_action: int = 7
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 64
+    # dropout: float = 0.0
+    # learning_rate: float = 0.001
+    # tau: float = 0.005
+    # initial_epsilon: float = 1.0
+    # epsilon_decay: float = 0.00025
+    # final_epsilon: float = 0.001
+    # discount: float = 0.95
+    # buffer_size: int = 1000
+    # batch_size: int = 256
+    # n_episodes = 5000
 
+    # DQN_3
+    # num_of_action: int = 7
+    # action_range: list = [-25, 25]
+    # n_observations: int = 4
+    # hidden_dim: int = 64
+    # dropout: float = 0.0
+    # learning_rate: float = 0.001
+    # tau: float = 0.005
+    # initial_epsilon: float = 1.0
+    # epsilon_decay: float = 0.001
+    # final_epsilon: float = 0.001
+    # discount: float = 0.95
+    # buffer_size: int = 1000
+    # batch_size: int = 256
+    # n_episodes = 2000
+
+    # DQN_4
     num_of_action: int = 7
-    action_range: list = [-25, 25]
+    action_range: list = [-3, 3]
     n_observations: int = 4
-    hidden_dim: int = 32
+    hidden_dim: int = 64
     dropout: float = 0.0
     learning_rate: float = 0.001
     tau: float = 0.005
     initial_epsilon: float = 1.0
-    epsilon_decay: float = 0.00025
+    epsilon_decay: float = 0.001
     final_epsilon: float = 0.001
     discount: float = 0.95
     buffer_size: int = 1000
     batch_size: int = 256
-    n_episodes = 5000
-
+    n_episodes = 2000
+    
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
     if is_ipython:
@@ -183,11 +216,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
 
     Algorithm_name = "DQN"
-    experiment_name = "DQN_2"
+    experiment_name = "DQN_4"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
-    hparams = {
+    hyperparam = {
     "num_of_action": num_of_action,
     "action_range_min": action_range[0],
     "action_range_max": action_range[1],
@@ -202,9 +235,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "buffer_size": buffer_size,
     "batch_size": batch_size,
     "n_episodes": n_episodes,
+    "describe" : "same as DQN_3 but less acion range"
     }
-    writer.add_hparams(hparams,{"dummy_metric": 0.0})
-
 
 
     agent = DQN(
@@ -244,7 +276,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if episode % 100 == 0 or episode == n_episodes - 1:
                 print(agent.epsilon)
 
-            if (episode % 1000 == 0) or (episode == n_episodes - 1):
+            if (episode % 200 == 0) or (episode == n_episodes - 1):
                 agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
 
         # Save DQN agent
@@ -252,10 +284,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_reward(path=fullpath, filename="reward")
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
+        #------------------------------------------------------------#
+        # Dump Hyperparam
+        os.makedirs(fullpath, exist_ok=True)
+        # Save the JSON file
+        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+            json.dump(hyperparam, f, indent=4)
+        #------------------------------------------------------------#
 
-        # w_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
-        # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
-        # agent.save_w(full_path, w_file)
 
         print('Complete')
         agent.plot_durations(show_result=True)

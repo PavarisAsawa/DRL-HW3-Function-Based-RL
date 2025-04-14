@@ -100,7 +100,9 @@ def main():
                     
                     # env stepping
                     next_obs, reward, terminated, truncated, _ = env.step(action)
+
                     done = terminated or truncated
+
                     obs = next_obs
                     print(f"Reward : {reward}")
                     print(f"obs.shape : {obs['policy'][0]}")

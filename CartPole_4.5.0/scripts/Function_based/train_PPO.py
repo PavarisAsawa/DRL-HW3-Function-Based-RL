@@ -5,14 +5,14 @@
 import argparse
 import sys
 import os
-import wandb
 from torch.utils.tensorboard import SummaryWriter
-
+import json
 from isaaclab.app import AppLauncher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from RL_Algorithm.Function_based.PPO import PPO
+# from save_file import *
 
 from tqdm import tqdm
 
@@ -57,7 +57,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-
 
 from isaaclab.envs import (
     DirectMARLEnv,
@@ -107,13 +106,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # learning_rate = None
     # hidden_dim = None
     # n_episodes = None
-    # initial_epsilon = None
-    # epsilon_decay = None  
-    # final_epsilon = None
     # discount = None
     # buffer_size = None
     # batch_size = None
-
 
     num_of_action: int = 7
     action_range: list = [-25, 25]
@@ -123,17 +118,29 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     learning_rate: float = 0.01
     discount: float = 0.95
     n_episodes = 5000
+    initial_epsilon = None
+    epsilon_decay = None  
+    final_epsilon = None
+    batch_size = 256
+    eps_clip = 0.2
 
-    # num_of_action: int = 2,
-    # action_range: list = [-2.5, 2.5],
-    # n_observations: int = 4,
-    # hidden_dim = 256,
-    # dropout = 0.05, 
-    # learning_rate: float = 0.01,
-    # tau: float = 0.005,
-    # discount_factor: float = 0.95,
-    # buffer_size: int = 256,
-    # batch_size: int = 1,
+    hyperparam = {
+        "num_of_action" : num_of_action,
+        "action_range" : action_range,
+        "learning_rate" : learning_rate,
+        "hidden_dim" : hidden_dim,
+        "n_episodes" : n_episodes,
+        "initial_epsilon" : initial_epsilon,
+        "epsilon_decay" : epsilon_decay,
+        "final_epsilon" : final_epsilon,
+        "discount" : discount,
+        "batch_size" : batch_size,
+        "num_envs" : args_cli.num_envs,
+        "eps" : eps_clip,
+        "critic_loss_coeff" : 0.5,
+        "entropthy_loss_coeff" : 0.1,
+        "lambda" : 1
+        }
 
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
@@ -156,20 +163,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     experiment_name = "dump"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
-    
-    hparams = {
-    "num_of_action": num_of_action,
-    "action_range_min": action_range[0],
-    "action_range_max": action_range[1],
-    "hidden_dim": hidden_dim,
-    "dropout": dropout,
-    "learning_rate": learning_rate,
-    "n_episodes": n_episodes,
-    "discount": discount,
-    }
-    writer.add_hparams(hparams , {"dummy_metric": 0.0})
-
-
 
     agent = PPO(
         device=device,
@@ -179,7 +172,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         hidden_dim=hidden_dim,
         n_observations=n_observations,
         dropout=dropout,
-        discount_factor=discount
+        discount_factor=discount,
+        nun_envs=args_cli.num_envs,
+        batch_size=batch_size,
+        eps_clip= eps_clip
     )
 
     # reset environment
@@ -191,15 +187,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            cumulative_reward = agent.learn(env)
+            reward_avg , timestep_avg , loss = agent.learn(env , max_steps=1000)
             
-            writer.add_scalar("Reward/Episode", cumulative_reward, episode)
+            writer.add_scalar("Reward/Episode", reward_avg, episode)
             if agent.training_error and agent.rewards[-1] is not None:
                 writer.add_scalar("Loss/Episode", agent.training_error[-1], episode)
-            writer.add_scalar("Time/Episode", agent.episode_durations[-1], episode)
-
-            if episode % 100 == 0 or episode == n_episodes - 1:
-                print(agent.epsilon)
+            writer.add_scalar("Time/Episode", agent.timestep_avg, episode)
 
             if (episode % 1000 == 0) or (episode == n_episodes - 1):
                 agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
@@ -209,6 +202,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_reward(path=fullpath, filename="reward")
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
+
+        #------------------------------------------------------------#
+        # Dump Hyperparam
+        os.makedirs(fullpath, exist_ok=True)
+        # Save the JSON file
+        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+            json.dump(hyperparam, f, indent=4)
+        #------------------------------------------------------------#
 
         print('Complete')
         agent.plot_durations(show_result=True)
