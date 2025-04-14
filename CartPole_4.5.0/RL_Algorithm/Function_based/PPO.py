@@ -127,11 +127,13 @@ class PPO(BaseAlgorithm):
                 - scaled_action: The final action after scaling.
             Tensor:
                 - Probabiblity from action : dim : tensor([n])
+                - Log probability of the action taken.
+                - Entropy of the action distribution.
         """
         # Change to Probability Distribution
         prob_cat = torch.distributions.Categorical(prob_each_action) # > Categorical(probs: torch.Size([1, 7]))
         action_idx = prob_cat.sample() # > tensor([1], device='cuda:0')
-        return action_idx , prob_cat.probs[0][action_idx]
+        return action_idx , prob_cat.probs[0][action_idx] , prob_cat.log_prob(action_idx) , prob_cat.entropy() 
     
     def calculate_stepwise_returns(self, rewards):
         """

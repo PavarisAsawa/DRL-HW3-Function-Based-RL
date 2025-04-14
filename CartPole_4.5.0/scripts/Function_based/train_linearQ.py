@@ -136,18 +136,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
-    hparams = {
-        "num_of_action": num_of_action,
-        "action_range_min": action_range[0],
-        "action_range_max": action_range[1],
-        "learning_rate": learning_rate,
-        "initial_epsilon": initial_epsilon,
-        "epsilon_decay": epsilon_decay,
-        "final_epsilon": final_epsilon,
-        "discount": discount,
-        "n_episodes": n_episodes,
-    }
-    writer.add_hparams(hparams,{"dummy_metric": 0.0})
 
     agent = Linear_QN(
         num_of_action=num_of_action,

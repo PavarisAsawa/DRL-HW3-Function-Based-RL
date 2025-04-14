@@ -102,17 +102,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ========================= Can be modified ========================== #
 
     # hyperparameters
-    # num_of_action = None
-    # action_range = [None, None]  
-    # learning_rate = None
-    # hidden_dim = None
-    # n_episodes = None
-    # initial_epsilon = None
-    # epsilon_decay = None  
-    # final_epsilon = None
-    # discount = None
-    # buffer_size = None
-    # batch_size = None
+    # test_DQN
+    # num_of_action = 11
+    # action_range = [-25, 25]
+    # dropout = 0.0
+    # tau = 0.005  
+    # learning_rate = 0.0001
+    # hidden_dim = 128,128
+    # initial_epsilon = 1.0
+    # epsilon_decay = 0.0002  
+    # final_epsilon = 0.001
+    # discount = 0.95
+    # buffer_size = 1000
+    # batch_size = 128
+    # n_episodes = 10000
 
 
     num_of_action: int = 7
