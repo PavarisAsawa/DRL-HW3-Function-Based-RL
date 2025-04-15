@@ -15,11 +15,43 @@ from torch.nn.functional import mse_loss
 from RL_Algorithm.RL_base_function import BaseAlgorithm
 
 class RolloutBuffer():
-    def __init__(self , batch_size):
-        self.batch_size = batch_size
-        self.memory = deque(maxlen=batch_size)
-    def add(self, state, action , reward, log_prob , entropy , done):
-        self.memory.append((state, action , reward, log_prob , entropy ,done))
+    def __init__(self , buffer_size):
+        self.buffer_size = buffer_size
+        self.memory = deque(maxlen=buffer_size)
+    def add(self, state, action, reward, log_prob, entropy, done):
+        # Detach to avoid carrying the computation graph
+        self.memory.append((
+            state.detach(), 
+            action.detach(), 
+            reward.detach(), 
+            log_prob.detach(), 
+            entropy.detach(), 
+            done.detach() if isinstance(done, torch.Tensor) else done
+        ))
+        
+    def __len__(self):
+        return len(self.memory)
+    
+    def sample_all_env(self , batch_size:int):
+        '''
+        Return random Transition with number of batch size from all environment 
+        '''
+        return random.sample(self.memory, batch_size)
+    
+    def sample_batch(self , batch_size:int):
+
+        states, actions, rewards, log_probs_old, entropies, dones = zip(*self.memory)
+        
+        states        = torch.cat(states, dim=0) # > change to tensor
+        actions       = torch.cat(actions, dim=0)
+        rewards       = torch.cat(rewards, dim=0)
+        log_probs_old = torch.cat(log_probs_old , dim=0)
+        entropies     = torch.cat(entropies, dim=0)
+        dones         = torch.cat(dones, dim=0)
+
+        random_indices = torch.randperm(len(states))[:batch_size]
+
+        return states[random_indices] , actions[random_indices] , rewards[random_indices], log_probs_old[random_indices] , entropies[random_indices] , dones[random_indices]
     
 class Actor(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, learning_rate=1e-4):
@@ -70,7 +102,7 @@ class Actor(nn.Module):
         return actor_prob
     
 class Critic(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, learning_rate=1e-4):
+    def __init__(self, input_dim, hidden_dim, learning_rate=1e-4):
         """
         Actor network for policy approximation.
 
@@ -130,7 +162,8 @@ class PPO(BaseAlgorithm):
                 nun_envs : int = 1,
                 eps_clip : float = 0.2,
                 critic_loss_coeff : float = 0.5,
-                entropy_loss_coeff : float = 0.1
+                entropy_loss_coeff : float = 0.1,
+                epoch : int = 20
                 ):
         """
         Actor-Critic algorithm implementation.
@@ -151,15 +184,16 @@ class PPO(BaseAlgorithm):
         # ========= put your code here ========= #
         self.device = device
         self.actor = Actor(n_observations, hidden_dim, num_of_action, learning_rate).to(device)
-        self.critic = Critic(n_observations, hidden_dim, num_of_action, learning_rate).to(device)
+        self.critic = Critic(n_observations, hidden_dim, learning_rate).to(device)
         self.batch_size = batch_size
         self.lamda = lamda
-        self.rollout_buffer = RolloutBuffer(batch_size=batch_size)
+        self.rollout_buffer = RolloutBuffer(buffer_size=buffer_size)
         self.discount_factor = discount_factor
         self.eps_clip = eps_clip
         self.num_envs = nun_envs
         self.critic_loss_coeff = critic_loss_coeff
         self.entropy_loss_coeff = entropy_loss_coeff
+        self.epoch = epoch
         self.optimizer = optim.AdamW(list(self.actor.parameters()) + list(self.critic.parameters()), lr=learning_rate, amsgrad=True)
 
         # Experiment with different values and configurations to see how they affect the training process.
@@ -197,28 +231,13 @@ class PPO(BaseAlgorithm):
                 - Entropy of the action distribution.
         """
         # Change to Probability Distribution
-        prob_cat = torch.distributions.Categorical(prob_each_action) # > Categorical(probs: torch.Size([1, 7]))
-        action_idx = prob_cat.sample() # > tensor([1], device='cuda:0')
+        dist = torch.distributions.Categorical(prob_each_action) # > Categorical(probs: torch.Size([1, 7]))
+        action_idx = dist.sample() # > tensor([1], device='cuda:0')
+        action_prob = dist.probs.gather(1, action_idx.unsqueeze(1)).squeeze(1)  # shape: [num_env]
+        log_prob = dist.log_prob(action_idx) 
+        entropy = dist.entropy()
         # [num_env] , [num_env , num_action] , [num_env , num_action] , [num_env] 
-        return action_idx , prob_cat.probs[0][action_idx] , prob_cat.log_prob(action_idx) , prob_cat.entropy() 
-    
-    def calculate_stepwise_returns(self, rewards):
-        """
-        Compute stepwise returns for the trajectory.
-
-        Args:
-            rewards (list): List of rewards obtained in the episode.
-        
-        Returns:
-            Tensor: Normalized stepwise returns. # Dim = [1]
-        """
-        stepwise_return = 0
-        stepwise_return_arr = []
-        for r in reversed(rewards):
-            stepwise_return = stepwise_return*self.discount_factor + r
-            stepwise_return_arr.append(stepwise_return)
-        tensor_norm = F.normalize(input=torch.tensor(list(reversed(stepwise_return_arr))),dim=0)
-        return tensor_norm # > tensor([-0.1740, -0.1021, 0.3525,  0.4109,  0.4675,  0.5201])
+        return action_idx , action_prob ,log_prob , entropy 
 
     def scale_action(self, action):
         """
@@ -236,25 +255,17 @@ class PPO(BaseAlgorithm):
         scaled_action = action * scale_factor + self.action_range[0]
         return scaled_action.view(-1, 1) 
     
-    def update_policy(self):
+    def update_policy(self , memory):
         """
         Update the policy using the calculated loss.
 
         Returns:
             float: Loss value after the update.
         """
-        memory = self.rollout_buffer.memory
-        if len(memory) == 0:
-            return None
-        states, actions, rewards, log_probs_old, entropies, dones = zip(*self.rollout_buffer.memory)
-        states        = torch.cat(states, dim=0) # > change to tensor
-        actions       = torch.cat(actions, dim=0)
-        rewards       = torch.cat(rewards, dim=0)
-        log_probs_old = torch.cat(log_probs_old , dim=0)
-        entropies     = torch.cat(entropies, dim=0)
-        dones         = torch.cat(dones, dim=0)
-
-        values = self.critic(states) # > (batch size * num_env , 1)
+        
+        states, actions, rewards, log_probs_old, entropies, dones = memory
+        # for _ in range(self.epoch):
+        values = self.critic(states).squeeze(-1) # > (batch size * num_env , 1)
         advantage = self.calculate_advantage(rewards , dones , values.squeeze()) # > [] , [] , []
 
         returns = advantage + values
@@ -270,7 +281,7 @@ class PPO(BaseAlgorithm):
         actor_loss = -torch.min(surr1,surr2).mean()
 
         # Critic Loss
-        critic_loss =  critic_loss = F.mse_loss(values, returns)
+        critic_loss = F.mse_loss(values, returns)
 
         # Entropy bonus
         entrupy_bonus = dist.entropy().mean()
@@ -282,25 +293,25 @@ class PPO(BaseAlgorithm):
         loss.backward()
         # Optionally clip gradients here if needed.
         self.optimizer.step()
-        # Clear the rollout buffer for the next rollout.
-        self.rollout_buffer.memory.clear()
         return loss.item()
 
     def calculate_advantage(self , rewards , dones , values):
-        T_step = self.batch_size
-        advantages = torch.zeros(self.batch_size , dtype=torch.float , device=self.device)
+        T_step = len(rewards)
+        advantages = torch.zeros(T_step, dtype=torch.float , device=self.device)
         gae = 0.0
+        # print("debug.........")
+
         for t in reversed(range(T_step)):
             mask = 1.0 - dones[t].float()
             next_value = 0.0 if t == T_step - 1 else values[t + 1]
             delta = rewards[t] + self.discount_factor * next_value * mask - values[t]
             gae = delta + self.discount_factor * self.lamda * mask * gae
             advantages[t] = gae
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         return advantages
 
 
-    def generate_trajectory(self , env , max_steps = 1000):
+    def train(self , env , max_steps = 1000):
         obs , _  = env.reset()
         num_envs = obs['policy'].shape[0]
 
@@ -312,6 +323,8 @@ class PPO(BaseAlgorithm):
 
         reward_avg = 0
         time_avg = 0
+
+        loss = 0
 
         cumulative_reward = 0
         done = False
@@ -333,11 +346,16 @@ class PPO(BaseAlgorithm):
             obs = next_obs
             active_envs = torch.logical_not(done)
 
+            # Update Agent
+            memory = self.rollout_buffer.sample_batch(self.batch_size)
+            if len(memory[0]) == self.batch_size:
+                loss = self.update_policy(memory=memory)    
+                # print("UPDATING POLICY!! ก'w'ก")
+
             steps_per_env[active_envs] += 1
             done_idx = torch.where(done)[0]
 
             cumulative_reward_per_env += reward
-
             for index in done_idx:
                 time_step_buffer.append(steps_per_env[index].item())
                 reward_buffer.append(cumulative_reward_per_env[index].item())
@@ -346,12 +364,14 @@ class PPO(BaseAlgorithm):
 
             steps_per_env[done_idx] = 0
             cumulative_reward_per_env[done_idx] = 0
-        
+            # print(step)
 
-        # self.calculate_advantage()
-        return reward_avg , time_avg 
+        # reward = 0
+        # time_avg = 0
+        # loss = 0
+        return reward_avg , time_avg , loss
 
-    def learn(self, env, max_steps=1000, num_agents=1, noise_scale=0.1, noise_decay=0.99):
+    def learn(self, env, max_steps=1000):
         """
         Train the agent on a single step.
 
@@ -369,14 +389,11 @@ class PPO(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        reward_avg , timestep_avg = self.generate_trajectory(env=env , max_steps=max_steps)
-        loss = self.update_policy()
+        reward_avg , timestep_avg , loss = self.train(env=env , max_steps=max_steps)
         self.training_error.append(loss)
+
         return reward_avg , timestep_avg , loss
         # self.plot_durations(timestep_avg)
-
-
-        
 
     def save_net_weights(self, path, filename):
         """

@@ -113,16 +113,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 32
+    hidden_dim: int = 64
     dropout: float = 0.0
-    learning_rate: float = 0.01
+    learning_rate: float = 0.0025
     discount: float = 0.95
-    n_episodes = 5000
+    n_episodes = 3000
     initial_epsilon = None
     epsilon_decay = None  
     final_epsilon = None
-    batch_size = 256
+    batch_size = 64
+    buffer_size = 512
     eps_clip = 0.2
+    maxstep = 500
 
     hyperparam = {
         "num_of_action" : num_of_action,
@@ -139,7 +141,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "eps" : eps_clip,
         "critic_loss_coeff" : 0.5,
         "entropthy_loss_coeff" : 0.1,
-        "lambda" : 1
+        "lambda" : 1,
+        "maxstep" : maxstep,
+        "buffer_size" : buffer_size,
         }
 
     # set up matplotlib
@@ -160,7 +164,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO"
-    experiment_name = "dump"
+    experiment_name = "PPO_1"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
@@ -175,7 +179,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         discount_factor=discount,
         nun_envs=args_cli.num_envs,
         batch_size=batch_size,
-        eps_clip= eps_clip
+        buffer_size=buffer_size,
+        eps_clip= eps_clip,
     )
 
     # reset environment
@@ -187,14 +192,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            reward_avg , timestep_avg , loss = agent.learn(env , max_steps=1000)
+            reward_avg , timestep_avg , loss = agent.learn(env , max_steps=maxstep)
             
-            writer.add_scalar("Reward/Episode", reward_avg, episode)
-            if agent.training_error and agent.rewards[-1] is not None:
-                writer.add_scalar("Loss/Episode", agent.training_error[-1], episode)
-            writer.add_scalar("Time/Episode", agent.timestep_avg, episode)
+            if loss is None:
+                loss = 0
 
-            if (episode % 1000 == 0) or (episode == n_episodes - 1):
+            writer.add_scalar("Reward/Episode", reward_avg, episode)
+            writer.add_scalar("Loss/Episode",loss, episode)
+            writer.add_scalar("Time/Episode",timestep_avg, episode)
+
+            if (episode % 500 == 0) or (episode == n_episodes - 1):
                 agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
 
         # Save DQN agent
@@ -222,9 +229,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if timestep == args_cli.video_length:
                 break
 
-        break
+        # break
     # ==================================================================== #
-
     # close the simulator
     env.close()
 
