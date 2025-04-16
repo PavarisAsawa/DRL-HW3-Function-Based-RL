@@ -199,8 +199,14 @@ class PPO(BaseAlgorithm):
         obs , _ = env.reset()
         training_flag = True
         episode_start = torch.zeros(self.n_envs, dtype=torch.bool)
+        self.rollout_buffer.reset()
 
-        for steping in range(roll_out_step):
+        steps_per_env = torch.zeros(self.n_envs, dtype=torch.int, device=obs['policy'].device)
+        cumulative_reward_per_env = torch.zeros(self.n_envs, dtype=torch.float, device=self.device)
+        time_step_buffer = deque(maxlen=self.n_envs)
+        reward_buffer = deque(maxlen=self.n_envs)
+
+        for stepping in range(roll_out_step):
 
             prob_each_action = self.actor(obs['policy'])
             action_idx , action_prob , log_prob , entropy  = self.select_action(prob_each_action=prob_each_action) # > tensor([4], device='cuda:0')
@@ -214,6 +220,7 @@ class PPO(BaseAlgorithm):
             # print(episode_start)
             # print(values)
             # print(log_prob)
+            # print(stepping)
 
             self.rollout_buffer.add(
                 obs['policy'].detach().cpu().numpy(),  # type: ignore[arg-type]
@@ -226,21 +233,32 @@ class PPO(BaseAlgorithm):
 
             obs = next_obs
             episode_start = dones
+            cumulative_reward_per_env += reward
+
+            active_envs = torch.logical_not(dones)
+            steps_per_env[active_envs] += 1
+            done_idx = torch.where(dones)[0]
+            for index in done_idx:
+                time_step_buffer.append(steps_per_env[index].item())
+                reward_buffer.append(cumulative_reward_per_env[index].item())
+                reward_avg = torch.mean(torch.tensor(reward_buffer, dtype=torch.float))
+                time_avg = torch.mean(torch.tensor(time_step_buffer , dtype=torch.float))
+            steps_per_env[done_idx] = 0
+            cumulative_reward_per_env[done_idx] = 0
+
         with torch.no_grad():
             values = self.critic(next_obs['policy'])
         self.rollout_buffer.compute_returns_and_advantage(last_values=values , dones=dones)
 
-        return training_flag
+        return training_flag , reward_avg.item() , time_avg.item()
     
     def learn(self , env , roll_out_step):
         # Collect Sample
-        training_flag = self.collect_rollout(env=env , roll_out_step=roll_out_step)
+        training_flag , reward , time = self.collect_rollout(env=env , roll_out_step=roll_out_step)
         
         # Use Sample
         entropy_losses = []
         pg_losses , values_losses = [] , []
-        clip_fraction =  []
-        
         for epoch in range(self.n_epochs):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
@@ -260,10 +278,45 @@ class PPO(BaseAlgorithm):
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()
                 pg_losses.append(policy_loss.item())
 
-                values_pred = rollout_data.old_values + torch.clamp(
+                value_pred = rollout_data.old_values + torch.clamp(
                     values - rollout_data.old_values, -self.vf_clip, self.vf_clip)
                 
-                values_loss = F.mse_loss(rollout_data.returns , values_pred)
-                values_losses.append(values_loss.item())
+                value_loss = F.mse_loss(rollout_data.returns , value_pred)
+                values_losses.append(value_loss.item())
 
-                
+                # Entropy loss favor exploration
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -torch.mean(-log_prob)
+                else:
+                    entropy_loss = -torch.mean(entropy)
+                entropy_losses.append(entropy_loss.item())
+
+                loss = policy_loss + self.ent_coeff * entropy_loss + self.vf_coeff * value_loss 
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+        return loss.item() , value_loss.item() , policy_loss.item() , entropy_loss.item() , reward , time
+    
+
+    def save_net_weights(self, path, filename):
+        """
+        Save weight parameters.
+        """
+        if not os.path.exists(path):
+            os.makedirs(path)
+        filepath = os.path.join(path, filename)
+        torch.save({
+            'actor_state_dict': self.actor.state_dict(),
+            'critic_state_dict': self.critic.state_dict(),
+        }, filepath)
+        
+    def load_net_weights(self, path, filename):
+        """
+        Load weight parameters.
+        """
+        checkpoint = torch.load(os.path.join(path, filename))
+        self.actor.load_state_dict(checkpoint['actor_state_dict'])
+        self.critic.load_state_dict(checkpoint['critic_state_dict'])

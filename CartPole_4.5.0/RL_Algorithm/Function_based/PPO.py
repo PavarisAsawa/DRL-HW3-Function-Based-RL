@@ -15,17 +15,19 @@ from torch.nn.functional import mse_loss
 from RL_Algorithm.RL_base_function import BaseAlgorithm
 
 class RolloutBuffer():
-    def __init__(self , buffer_size):
+    def __init__(self , buffer_size , n_envs):
+        self.n_envs = n_envs
         self.buffer_size = buffer_size
         self.memory = deque(maxlen=buffer_size)
-    def add(self, state, action, reward, log_prob, entropy, done):
+        self.advantages = torch.tensor((self.buffer_size, self.n_envs), dtype=torch.float32)
+    def add(self, state, action, reward, log_prob, values, done):
         # Detach to avoid carrying the computation graph
         self.memory.append((
             state.detach(), 
             action.detach(), 
             reward.detach(), 
-            log_prob.detach(), 
-            entropy.detach(), 
+            log_prob.detach(),
+            values.detach(), 
             done.detach() if isinstance(done, torch.Tensor) else done
         ))
         
@@ -40,18 +42,18 @@ class RolloutBuffer():
     
     def sample_batch(self , batch_size:int):
 
-        states, actions, rewards, log_probs_old, entropies, dones = zip(*self.memory)
+        states, actions, rewards, log_probs_old, values, dones = zip(*self.memory)
         
         states        = torch.cat(states, dim=0) # > change to tensor
         actions       = torch.cat(actions, dim=0)
         rewards       = torch.cat(rewards, dim=0)
         log_probs_old = torch.cat(log_probs_old , dim=0)
-        entropies     = torch.cat(entropies, dim=0)
+        values        = torch.cat(values, dim=0)
         dones         = torch.cat(dones, dim=0)
+        advantages    = self.advantages.flatten()
 
         random_indices = torch.randperm(len(states))[:batch_size]
-
-        return states[random_indices] , actions[random_indices] , rewards[random_indices], log_probs_old[random_indices] , entropies[random_indices] , dones[random_indices]
+        return states[random_indices] , actions[random_indices] , rewards[random_indices], log_probs_old[random_indices] , values[random_indices] , dones[random_indices] , advantages[random_indices]
     
 class Actor(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, learning_rate=1e-4):
@@ -187,7 +189,7 @@ class PPO(BaseAlgorithm):
         self.critic = Critic(n_observations, hidden_dim, learning_rate).to(device)
         self.batch_size = batch_size
         self.lamda = lamda
-        self.rollout_buffer = RolloutBuffer(buffer_size=buffer_size)
+        self.rollout_buffer = RolloutBuffer(buffer_size=buffer_size , n_envs =nun_envs)
         self.discount_factor = discount_factor
         self.eps_clip = eps_clip
         self.num_envs = nun_envs
@@ -251,6 +253,8 @@ class PPO(BaseAlgorithm):
             torch.Tensor: Scaled action tensor.
         """
         # ========= put your code here ========= #
+        # print("----------------")
+        # print(action)
         scale_factor = (self.action_range[1] - self.action_range[0]) / (self.num_of_action-1 )
         scaled_action = action * scale_factor + self.action_range[0]
         return scaled_action.view(-1, 1) 
@@ -262,13 +266,14 @@ class PPO(BaseAlgorithm):
         Returns:
             float: Loss value after the update.
         """
-        
-        states, actions, rewards, log_probs_old, entropies, dones = memory
+        states, actions, rewards, log_probs_old, values, dones , advantages = memory
         # for _ in range(self.epoch):
         values = self.critic(states).squeeze(-1) # > (batch size * num_env , 1)
-        advantage = self.calculate_advantage(rewards , dones , values.squeeze()) # > [] , [] , []
+        # advantage = self.calculate_advantage(rewards , dones , values.squeeze()) # > [] , [] , []
+        
+        values = (values-values.mean())/(values.std()+1e-8)
 
-        returns = advantage + values
+        returns = advantages + values
 
         probs = self.actor(states)                  # Get new action probabilities.
         dist = torch.distributions.Categorical(probs)
@@ -276,8 +281,8 @@ class PPO(BaseAlgorithm):
 
         # Actor Loss
         ratio = torch.exp(log_probs_new - log_probs_old)
-        surr1 = ratio*advantage
-        surr2 = torch.clamp(ratio , 1.0-self.eps_clip , 1.0+self.eps_clip)*advantage
+        surr1 = ratio*advantages
+        surr2 = torch.clamp(ratio , 1.0-self.eps_clip , 1.0+self.eps_clip)*advantages
         actor_loss = -torch.min(surr1,surr2).mean()
 
         # Critic Loss
@@ -295,21 +300,53 @@ class PPO(BaseAlgorithm):
         self.optimizer.step()
         return loss.item()
 
-    def calculate_advantage(self , rewards , dones , values):
-        T_step = len(rewards)
-        advantages = torch.zeros(T_step, dtype=torch.float , device=self.device)
-        gae = 0.0
+    def calculate_advantage(self , rewards , dones , last_values):
+        states, actions, rewards, log_probs_old, values , dones = zip(*self.rollout_buffer.memory)
+        # Convert to tensors
+        rewards = torch.stack(rewards).to(self.device)
+        values = torch.stack(values).to(self.device).squeeze(2)
+        dones = torch.stack(dones).to(self.device).float()
+        last_values = last_values.flatten()
+        
+        # Dimension : [buffer_size , number_envs]
+        # torch.Size([500, 64])
+        # torch.Size([500, 64])
+        # torch.Size([500, 64])
+        # torch.Size([64])
+
+        T_step, n_envs = rewards.shape
+        advantages = torch.zeros((T_step, n_envs), dtype=torch.float32, device=self.device)
+        gae = torch.zeros(n_envs, dtype=torch.float32, device=self.device)
+
         # print("debug.........")
 
+        gae = torch.zeros(n_envs, dtype=torch.float32, device=self.device)
+
         for t in reversed(range(T_step)):
-            mask = 1.0 - dones[t].float()
-            next_value = 0.0 if t == T_step - 1 else values[t + 1]
+            mask = 1.0 - dones[t]  # [n_envs]
+            next_value = last_values if t == T_step - 1 else values[t + 1]  # [n_envs]
             delta = rewards[t] + self.discount_factor * next_value * mask - values[t]
             gae = delta + self.discount_factor * self.lamda * mask * gae
             advantages[t] = gae
-        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        return advantages
+        advantages = (advantages - advantages.mean())/(advantages.std() + 1e-8)
+        self.rollout_buffer.advantages = advantages
 
+    
+    # def compute_returns_and_advantage(self , last_values : torch.Tensor , dones : np.ndarray) -> None:
+    #     last_values = last_values.clone().cpu().numpy().flatten()
+    #     dones = dones.cpu().numpy()
+    #     last_gae_lam = 0
+    #     for step in reversed(range(self.buffer_size)):
+    #         if step == self.buffer_size - 1: # Use real last value
+    #             next_non_terminal = 1.0 - dones.astype(np.float32)
+    #             next_values = last_values
+    #         else:
+    #             next_non_terminal = 1.0 - self.episode_starts[step + 1]
+    #             next_values = self.values[step + 1]
+    #         delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
+    #         last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+    #         self.advantages[step] = last_gae_lam
+    #         # print("debugging.....")
 
     def train(self , env , max_steps = 1000):
         obs , _  = env.reset()
@@ -334,23 +371,19 @@ class PPO(BaseAlgorithm):
             # Predict action from the policy network
             prob_each_action = self.actor(obs['policy']) 
             action_idx , action_prob , log_prob , entropy  = self.select_action(prob_each_action=prob_each_action) # > tensor([4], device='cuda:0')
-            
+            values = self.critic(obs['policy'])
             # Execute action in the environment and observe next state and reward
             next_obs, reward, terminated, truncated, _ = env.step(self.scale_action(action_idx))  # Step Environmentscripts/Function_based/train.py --task Stabilize-Isaac-Cartpole-v0 
             done = torch.logical_or(terminated, truncated)
             # Store the transition in memory
-            self.rollout_buffer.add(state=obs['policy'],action=action_idx,reward=reward,log_prob=log_prob,entropy=entropy,done=done)
+            self.rollout_buffer.add(state=obs['policy'],action=action_idx,reward=reward,log_prob=log_prob,values=values,done=done)
+            
+
             # ====================================== #
 
             # Update state
             obs = next_obs
             active_envs = torch.logical_not(done)
-
-            # Update Agent
-            memory = self.rollout_buffer.sample_batch(self.batch_size)
-            if len(memory[0]) == self.batch_size:
-                loss = self.update_policy(memory=memory)    
-                # print("UPDATING POLICY!! ก'w'ก")
 
             steps_per_env[active_envs] += 1
             done_idx = torch.where(done)[0]
@@ -364,7 +397,12 @@ class PPO(BaseAlgorithm):
 
             steps_per_env[done_idx] = 0
             cumulative_reward_per_env[done_idx] = 0
-            # print(step)
+
+        last_val = self.critic(obs['policy'])
+        advantage = self.calculate_advantage(reward, dones=done , last_values=last_val) # > [] , [] , []
+        memory = self.rollout_buffer.sample_batch(self.batch_size)
+        loss = self.update_policy(memory=memory)    
+        # print("UPDATING POLICY!! ก'w'ก")
 
         # reward = 0
         # time_avg = 0

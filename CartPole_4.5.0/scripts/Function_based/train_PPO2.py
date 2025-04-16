@@ -111,7 +111,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # batch_size = None
 
     num_of_action: int = 7
-    action_range: list = [-25, 25]
+    action_range: list = [-25.0, 25.0]
     dropout: float = 0.0
     n_observations : int = 4
     learning_rate : float = 0.01
@@ -121,18 +121,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     vf_coeff : float = 0.5
     eps_clip : float = 0.2
     vf_clip : float = 0.2
-    action_range : list = [-5.0,5]
     hidden_dim : int = 64
     n_envs :int = args_cli.num_envs
-    n_steps : int = 640
-    batch_size : int = 64
-    buffer_size : int = 640
+    n_steps : int = 512
+    batch_size : int = 128
+    buffer_size : int = 512
     n_epochs : int = 1
-    n_episodes = 3000
+    n_episodes = 2000
 
     hyperparam = {
         "num_of_action": num_of_action,
-        "action_range": action_range,
         "dropout": dropout,
         "n_observations" : n_observations,
         "learning_rate" : learning_rate,
@@ -170,7 +168,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO2"
-    experiment_name = "PPO_1"
+    experiment_name = "PPO2_02"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
@@ -194,6 +192,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         n_epochs=n_epochs
     )
 
+    #------------------------------------------------------------#
+    # Dump Hyperparam
+    os.makedirs(fullpath, exist_ok=True)
+    # Save the JSON file
+    with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+        json.dump(hyperparam, f, indent=4)
+    #------------------------------------------------------------#
+
     # reset environment
     obs, _ = env.reset()
     timestep = 0
@@ -203,28 +209,28 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            training_flag = agent.learn(env , roll_out_step=agent.n_steps)
+            loss , value_loss , policy_loss , entropy_loss , reward , time = agent.learn(env , roll_out_step=agent.n_steps)
 
-            # writer.add_scalar("Reward/Episode", reward_avg, episode)
-            # writer.add_scalar("Loss/Episode",loss, episode)
-            # writer.add_scalar("Time/Episode",timestep_avg, episode)
+            if time is None:
+                time = 0
+            if reward is None:
+                reward = 0
+            if loss is None:
+                loss = 0
 
-            # if (episode % 500 == 0) or (episode == n_episodes - 1):
-            #     agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
+            writer.add_scalar("Reward/Episode", reward, episode)
+            writer.add_scalar("Loss/Episode",loss, episode)
+            writer.add_scalar("Time/Episode",time, episode)
+
+            if (episode % 50 == 0) or (episode == n_episodes - 1):
+                agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
 
         # Save DQN agent
-        # agent.save_net_weights(path=fullpath, filename="weight")
-        # agent.save_reward(path=fullpath, filename="reward")
-        # agent.save_episode_duration(path=fullpath, filename="duration")
-        # agent.save_loss(path=fullpath, filename="loss")
+        agent.save_net_weights(path=fullpath, filename="weight")
+        agent.save_reward(path=fullpath, filename="reward")
+        agent.save_episode_duration(path=fullpath, filename="duration")
+        agent.save_loss(path=fullpath, filename="loss")
 
-        #------------------------------------------------------------#
-        # Dump Hyperparam
-        os.makedirs(fullpath, exist_ok=True)
-        # Save the JSON file
-        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
-            json.dump(hyperparam, f, indent=4)
-        #------------------------------------------------------------#
 
         print('Complete')
         agent.plot_durations(show_result=True)

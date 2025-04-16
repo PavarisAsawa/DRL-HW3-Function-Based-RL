@@ -82,6 +82,9 @@ class RolloutBuffer():
             delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
+            # print("debugging.....")
+
+
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
         self.returns = self.advantages + self.values
@@ -107,11 +110,13 @@ class RolloutBuffer():
         self.log_probs[self.pos] = log_prob
         self.pos += 1
         if self.pos == self.buffer_size-1:
+            self.pos = 0
             self.full = True
     
     def get(self , batch_size : Optional[int] = None) -> Generator[RolloutBufferSamples , None , None]: # Generator[YieldType, SendType, ReturnType]
         assert self.full, "" # if not full End Program
         indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # print(indices.shape)
         if not self.generator_ready: # If not ready
             _tensor_names = [
                 "observations",

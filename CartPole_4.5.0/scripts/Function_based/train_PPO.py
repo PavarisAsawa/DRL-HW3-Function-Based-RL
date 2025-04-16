@@ -115,16 +115,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     n_observations: int = 4
     hidden_dim: int = 64
     dropout: float = 0.0
-    learning_rate: float = 0.0025
+    learning_rate: float = 0.00025
     discount: float = 0.95
-    n_episodes = 3000
-    initial_epsilon = None
-    epsilon_decay = None  
-    final_epsilon = None
-    batch_size = 64
+    n_episodes = 2000
+    batch_size = 512
     buffer_size = 512
     eps_clip = 0.2
-    maxstep = 500
+    maxstep = 512
+    entropy_loss_coeff = 0.01
+    critic_loss_coeff = 0.5
+    
+
 
     hyperparam = {
         "num_of_action" : num_of_action,
@@ -132,18 +133,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "learning_rate" : learning_rate,
         "hidden_dim" : hidden_dim,
         "n_episodes" : n_episodes,
-        "initial_epsilon" : initial_epsilon,
-        "epsilon_decay" : epsilon_decay,
-        "final_epsilon" : final_epsilon,
         "discount" : discount,
         "batch_size" : batch_size,
         "num_envs" : args_cli.num_envs,
         "eps" : eps_clip,
-        "critic_loss_coeff" : 0.5,
-        "entropthy_loss_coeff" : 0.1,
+        "critic_loss_coeff" : critic_loss_coeff,
+        "entropthy_loss_coeff" : entropy_loss_coeff,
         "lambda" : 1,
         "maxstep" : maxstep,
         "buffer_size" : buffer_size,
+        "des" : "reduce learning rate to 0.0005 , same as PPO_05 but increase critic loss coeff to 1"
         }
 
     # set up matplotlib
@@ -164,9 +163,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO"
-    experiment_name = "PPO_1"
+    experiment_name = "PPO_06"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
+
+    #------------------------------------------------------------#
+    # Dump Hyperparam
+    os.makedirs(fullpath, exist_ok=True)
+    # Save the JSON file
+    with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+        json.dump(hyperparam, f, indent=4)
+    #------------------------------------------------------------#
 
     agent = PPO(
         device=device,
@@ -181,6 +188,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         batch_size=batch_size,
         buffer_size=buffer_size,
         eps_clip= eps_clip,
+        entropy_loss_coeff=entropy_loss_coeff,
+        critic_loss_coeff=critic_loss_coeff,
     )
 
     # reset environment
@@ -201,7 +210,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             writer.add_scalar("Loss/Episode",loss, episode)
             writer.add_scalar("Time/Episode",timestep_avg, episode)
 
-            if (episode % 500 == 0) or (episode == n_episodes - 1):
+            if (episode % 100 == 0) or (episode == n_episodes - 1):
                 agent.save_net_weights(path=fullpath, filename=f"weight_{episode}")
 
         # Save DQN agent
@@ -210,13 +219,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
 
-        #------------------------------------------------------------#
-        # Dump Hyperparam
-        os.makedirs(fullpath, exist_ok=True)
-        # Save the JSON file
-        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
-            json.dump(hyperparam, f, indent=4)
-        #------------------------------------------------------------#
+
 
         print('Complete')
         agent.plot_durations(show_result=True)
