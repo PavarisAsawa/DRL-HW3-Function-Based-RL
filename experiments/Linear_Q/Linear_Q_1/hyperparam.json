@@ -1,0 +1,12 @@
+{
+    "num_of_action": 5,
+    "action_range_min": -8,
+    "action_range_max": 8,
+    "learning_rate": 0.005,
+    "initial_epsilon": 1.0,
+    "epsilon_decay": 0.0003,
+    "final_epsilon": 0.001,
+    "discount": 0.95,
+    "n_episodes": 5000,
+    "describe": "adjust action space lr = 0.005"
+}

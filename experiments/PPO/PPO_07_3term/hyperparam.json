@@ -1,0 +1,19 @@
+{
+    "num_of_action": 7,
+    "action_range": [
+        -25,
+        25
+    ],
+    "learning_rate": 0.0002,
+    "hidden_dim": 64,
+    "n_episodes": 2000,
+    "discount": 0.95,
+    "batch_size": 512,
+    "num_envs": 1048,
+    "eps": 0.2,
+    "critic_loss_coeff": 0.5,
+    "entropthy_loss_coeff": 0.01,
+    "maxstep": 512,
+    "buffer_size": 512,
+    "des": "reduce learning rate to 0.0001 , "
+}

@@ -1,0 +1,12 @@
+{
+    "num_of_action": 7,
+    "action_range_min": -25,
+    "action_range_max": 25,
+    "learning_rate": 0.01,
+    "initial_epsilon": 1.0,
+    "epsilon_decay": 0.001,
+    "final_epsilon": 0.001,
+    "discount": 0.95,
+    "n_episodes": 2500,
+    "describe": "increase lr to 0.01 , increase epsilon decay"
+}

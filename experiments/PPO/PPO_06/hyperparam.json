@@ -16,5 +16,5 @@
     "lambda": 1,
     "maxstep": 512,
     "buffer_size": 512,
-    "des": "reduce learning rate to 0.0005 , same as PPO_05 but increase critic loss coeff to 1"
+    "des": "reduce learning rate to 0.0005"
 }

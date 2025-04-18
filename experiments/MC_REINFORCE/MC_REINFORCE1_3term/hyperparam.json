@@ -1,0 +1,11 @@
+{
+    "num_of_action": 7,
+    "action_range_min": -25,
+    "action_range_max": 25,
+    "hidden_dim": 64,
+    "dropout": 0.0,
+    "learning_rate": 0.004,
+    "discount": 0.95,
+    "n_episodes": 5000,
+    "describe": "add more layer and decrease discout factor to 0.90"
+}

@@ -53,7 +53,6 @@ class MC_REINFORCE_network(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.dropout(x)
         
-
         # softmax to output
         x = self.softmax(x)
         return x

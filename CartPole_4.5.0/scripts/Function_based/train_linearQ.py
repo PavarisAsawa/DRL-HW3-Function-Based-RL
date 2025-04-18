@@ -47,6 +47,7 @@ import gymnasium as gym
 import torch
 from datetime import datetime
 import random
+import json
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -110,7 +111,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     final_epsilon: float = 0.001
     discount = 0.95
     n_observations: int = 4
-    n_episodes = 5000
+    n_episodes = 2500
 
 
     # set up matplotlib
@@ -131,11 +132,31 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "Linear_Q"
-    experiment_name = "Linear_Q_base"
+    experiment_name = "Linear_Q_3"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
 
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
+
+    hyperparam = {
+    "num_of_action": num_of_action,
+    "action_range_min": action_range[0],
+    "action_range_max": action_range[1],
+    "learning_rate": learning_rate,
+    "initial_epsilon": initial_epsilon,
+    "epsilon_decay": epsilon_decay,
+    "final_epsilon": final_epsilon,
+    "discount": discount,
+    "n_episodes": n_episodes,
+    "describe" : "increase lr to 0.01 , increase epsilon decay"
+    }
+    #------------------------------------------------------------#
+    # Dump Hyperparam
+    os.makedirs(fullpath, exist_ok=True)
+    # Save the JSON file
+    with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+        json.dump(hyperparam, f, indent=4)
+    #------------------------------------------------------------#
 
     agent = Linear_QN(
         num_of_action=num_of_action,
@@ -164,7 +185,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         if episode % 100 == 0 or episode == n_episodes - 1:
             print(agent.epsilon)
-        if (episode % 1000 == 0) or (episode == n_episodes - 1):
+        if (episode % 500 == 0) or (episode == n_episodes - 1):
                 agent.save_w(fullpath, f"weight_{episode}")
 
         agent.save_w(fullpath, "weight")

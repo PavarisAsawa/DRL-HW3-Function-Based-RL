@@ -115,7 +115,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     n_observations: int = 4
     hidden_dim: int = 64
     dropout: float = 0.0
-    learning_rate: float = 0.00025
+    learning_rate: float = 0.0002
     discount: float = 0.95
     n_episodes = 2000
     batch_size = 512
@@ -139,10 +139,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "eps" : eps_clip,
         "critic_loss_coeff" : critic_loss_coeff,
         "entropthy_loss_coeff" : entropy_loss_coeff,
-        "lambda" : 1,
         "maxstep" : maxstep,
         "buffer_size" : buffer_size,
-        "des" : "reduce learning rate to 0.0005 , same as PPO_05 but increase critic loss coeff to 1"
+        "des" : "reduce learning rate to 0.0001 , "
         }
 
     # set up matplotlib
@@ -163,7 +162,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO"
-    experiment_name = "PPO_06"
+    experiment_name = "PPO_07_3term"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
@@ -201,13 +200,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         # with torch.inference_mode():
         
         for episode in tqdm(range(n_episodes)):
-            reward_avg , timestep_avg , loss = agent.learn(env , max_steps=maxstep)
+            reward_avg , timestep_avg , loss , actor_loss , critic_loss , entropy_bonus = agent.learn(env , max_steps=maxstep)
             
             if loss is None:
                 loss = 0
 
             writer.add_scalar("Reward/Episode", reward_avg, episode)
             writer.add_scalar("Loss/Episode",loss, episode)
+            writer.add_scalar("Loss/Actor",actor_loss, episode)
+            writer.add_scalar("Loss/Critic",critic_loss, episode)
+            writer.add_scalar("Loss/Entropy",entropy_bonus, episode)
             writer.add_scalar("Time/Episode",timestep_avg, episode)
 
             if (episode % 100 == 0) or (episode == n_episodes - 1):

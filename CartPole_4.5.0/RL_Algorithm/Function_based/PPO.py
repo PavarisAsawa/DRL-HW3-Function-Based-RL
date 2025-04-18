@@ -298,7 +298,7 @@ class PPO(BaseAlgorithm):
         loss.backward()
         # Optionally clip gradients here if needed.
         self.optimizer.step()
-        return loss.item()
+        return loss.item() , actor_loss.item() , critic_loss.item() , entrupy_bonus.item()
 
     def calculate_advantage(self , rewards , dones , last_values):
         states, actions, rewards, log_probs_old, values , dones = zip(*self.rollout_buffer.memory)
@@ -401,13 +401,13 @@ class PPO(BaseAlgorithm):
         last_val = self.critic(obs['policy'])
         advantage = self.calculate_advantage(reward, dones=done , last_values=last_val) # > [] , [] , []
         memory = self.rollout_buffer.sample_batch(self.batch_size)
-        loss = self.update_policy(memory=memory)    
+        loss , actor_loss , critic_loss , entropy_bonus = self.update_policy(memory=memory)    
         # print("UPDATING POLICY!! ก'w'ก")
 
         # reward = 0
         # time_avg = 0
         # loss = 0
-        return reward_avg , time_avg , loss
+        return reward_avg , time_avg , loss , actor_loss , critic_loss , entropy_bonus
 
     def learn(self, env, max_steps=1000):
         """
@@ -427,10 +427,10 @@ class PPO(BaseAlgorithm):
         # Flag to indicate episode termination (boolean)
         # Step counter (int)
         # ========= put your code here ========= #
-        reward_avg , timestep_avg , loss = self.train(env=env , max_steps=max_steps)
+        reward_avg , timestep_avg , loss , actor_loss , critic_loss , entropy_bonus = self.train(env=env , max_steps=max_steps)
         self.training_error.append(loss)
 
-        return reward_avg , timestep_avg , loss
+        return reward_avg , timestep_avg , loss , actor_loss , critic_loss , entropy_bonus
         # self.plot_durations(timestep_avg)
 
     def save_net_weights(self, path, filename):

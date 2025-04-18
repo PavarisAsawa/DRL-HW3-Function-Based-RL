@@ -149,9 +149,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 32
+    hidden_dim: int = 64
     dropout: float = 0.0
-    learning_rate: float = 0.005
+    learning_rate: float = 0.01
     discount: float = 0.95
     n_episodes = 5000
 
@@ -173,7 +173,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "MC_REINFORCE"
-    experiment_name = "MC_REINFORCE_3"
+    experiment_name = "MC_REINFORCE1_3term2"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
     
@@ -186,8 +186,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "learning_rate": learning_rate,
     "discount": discount,
     "n_episodes": n_episodes,
-    "describe" : "like a base but reduce little bit LR"
+    "describe" : "add more layer and 3 reward term lr = 0.006"
     }
+
+    #------------------------------------------------------------#
+    # Dump Hyperparam
+    os.makedirs(fullpath, exist_ok=True)
+    # Save the JSON file
+    with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+        json.dump(hyperparam, f, indent=4)
+    #------------------------------------------------------------#
+
 
 
     agent = MC_REINFORCE(
@@ -228,13 +237,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_reward(path=fullpath, filename="reward")
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
-        #------------------------------------------------------------#
-        # Dump Hyperparam
-        os.makedirs(fullpath, exist_ok=True)
-        # Save the JSON file
-        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
-            json.dump(hyperparam, f, indent=4)
-        #------------------------------------------------------------#
 
         print('Complete')
         agent.plot_durations(show_result=True)

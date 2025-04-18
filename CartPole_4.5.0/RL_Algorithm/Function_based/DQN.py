@@ -67,7 +67,7 @@ class DQN(BaseAlgorithm):
             n_observations: int = 4,
             hidden_dim: int = 64,
             dropout: float = 0.5,
-            learning_rate: float = 0.01,
+            learning_rate: float = 0.005,
             tau: float = 0.005,
             initial_epsilon: float = 1.0,
             epsilon_decay: float = 1e-3,

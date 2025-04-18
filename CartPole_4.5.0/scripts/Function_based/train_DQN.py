@@ -182,8 +182,24 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # n_episodes = 2000
 
     # DQN_4
+    # num_of_action: int = 7
+    # action_range: list = [-3, 3]
+    # n_observations: int = 4
+    # hidden_dim: int = 64
+    # dropout: float = 0.0
+    # learning_rate: float = 0.001
+    # tau: float = 0.005
+    # initial_epsilon: float = 1.0
+    # epsilon_decay: float = 0.001
+    # final_epsilon: float = 0.001
+    # discount: float = 0.95
+    # buffer_size: int = 1000
+    # batch_size: int = 256
+    # n_episodes = 2000
+    
+    # DQN1_0
     num_of_action: int = 7
-    action_range: list = [-3, 3]
+    action_range: list = [-25, 25]
     n_observations: int = 4
     hidden_dim: int = 64
     dropout: float = 0.0
@@ -193,10 +209,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     epsilon_decay: float = 0.001
     final_epsilon: float = 0.001
     discount: float = 0.95
-    buffer_size: int = 1000
+    buffer_size: int = 1048
     batch_size: int = 256
-    n_episodes = 2000
-    
+    n_episodes = 5000
+
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
     if is_ipython:
@@ -216,7 +232,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
 
     Algorithm_name = "DQN"
-    experiment_name = "DQN_4"
+    experiment_name = "DQN1_3_3term"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
@@ -235,9 +251,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "buffer_size": buffer_size,
     "batch_size": batch_size,
     "n_episodes": n_episodes,
-    "describe" : "same as DQN_3 but less acion range"
+    "describe" : "lr to 0.001 and to 3 term"
     }
-
+    #------------------------------------------------------------#
+    # Dump Hyperparam
+    os.makedirs(fullpath, exist_ok=True)
+    # Save the JSON file
+    with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
+        json.dump(hyperparam, f, indent=4)
+    #------------------------------------------------------------#
 
     agent = DQN(
         device=device,
@@ -284,13 +306,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         agent.save_reward(path=fullpath, filename="reward")
         agent.save_episode_duration(path=fullpath, filename="duration")
         agent.save_loss(path=fullpath, filename="loss")
-        #------------------------------------------------------------#
-        # Dump Hyperparam
-        os.makedirs(fullpath, exist_ok=True)
-        # Save the JSON file
-        with open(os.path.join(fullpath, "hyperparam.json"), "w") as f:
-            json.dump(hyperparam, f, indent=4)
-        #------------------------------------------------------------#
+
 
 
         print('Complete')
