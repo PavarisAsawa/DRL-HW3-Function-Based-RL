@@ -117,7 +117,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dropout: float = 0.0
     learning_rate: float = 0.0002
     discount: float = 0.95
-    n_episodes = 2000
+    n_episodes = 5000
     batch_size = 512
     buffer_size = 512
     eps_clip = 0.2
@@ -141,7 +141,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "entropthy_loss_coeff" : entropy_loss_coeff,
         "maxstep" : maxstep,
         "buffer_size" : buffer_size,
-        "des" : "reduce learning rate to 0.0001 , "
+        "des" : "reduce learning rate to 0.0002 64 agent 5term , "
         }
 
     # set up matplotlib
@@ -162,7 +162,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO"
-    experiment_name = "PPO_07_3term"
+    experiment_name = "PPO_09_5term64"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 
