@@ -151,7 +151,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     n_observations: int = 4
     hidden_dim: int = 64
     dropout: float = 0.0
-    learning_rate: float = 0.01
+    learning_rate: float = 0.005
     discount: float = 0.95
     n_episodes = 5000
 
@@ -173,7 +173,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "MC_REINFORCE"
-    experiment_name = "MC_REINFORCE1_3term2"
+    experiment_name = "MC_REINFORCE2_0"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
     
@@ -186,7 +186,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     "learning_rate": learning_rate,
     "discount": discount,
     "n_episodes": n_episodes,
-    "describe" : "add more layer and 3 reward term lr = 0.006"
+    "describe" : "Adjust layer"
     }
 
     #------------------------------------------------------------#

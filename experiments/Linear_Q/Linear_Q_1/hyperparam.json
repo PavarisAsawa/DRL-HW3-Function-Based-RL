@@ -8,5 +8,5 @@
     "final_epsilon": 0.001,
     "discount": 0.95,
     "n_episodes": 5000,
-    "describe": "adjust action space lr = 0.005"
+    "describe": "smaller space"
 }

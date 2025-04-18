@@ -17,8 +17,8 @@ from tqdm import tqdm
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
-parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
-parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
+parser.add_argument("--video_length", type=int, default=3600, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_interval", type=int, default=10800, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
@@ -150,15 +150,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     )
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
-    Algorithm_name = "DQN"
-    Experiment_name = "test_DQN"  
+    Algorithm_name = "Linear_Q"
+    Experiment_name = "Linear_Q_0"
     episode = 9999
     # q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
     # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
     # agent.load_w(full_path, q_value_file)
-    # fullpath = f"experiments/{Algorithm_name}/{Experiment_name}"
-    fullpath = f"w/Stabilize/Linear_Q/"
-    agent.load_w(path=fullpath,filename="Linear_Q_4999_7_25.json.npy")
+    fullpath = f"experiments/{Algorithm_name}/{Experiment_name}"
+    agent.load_w(path=fullpath,filename="weight.npy")
 
     # reset environment
     obs, _ = env.reset()

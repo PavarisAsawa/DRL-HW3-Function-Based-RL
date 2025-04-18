@@ -181,21 +181,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # batch_size: int = 256
     # n_episodes = 2000
 
-    # DQN_4
-    # num_of_action: int = 7
-    # action_range: list = [-3, 3]
-    # n_observations: int = 4
-    # hidden_dim: int = 64
-    # dropout: float = 0.0
-    # learning_rate: float = 0.001
-    # tau: float = 0.005
-    # initial_epsilon: float = 1.0
-    # epsilon_decay: float = 0.001
-    # final_epsilon: float = 0.001
-    # discount: float = 0.95
-    # buffer_size: int = 1000
-    # batch_size: int = 256
-    # n_episodes = 2000
     
     # DQN1_0
     num_of_action: int = 7
@@ -210,7 +195,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     final_epsilon: float = 0.001
     discount: float = 0.95
     buffer_size: int = 1048
-    batch_size: int = 256
+    batch_size: int = 512
     n_episodes = 5000
 
     # set up matplotlib
@@ -232,7 +217,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
 
     Algorithm_name = "DQN"
-    experiment_name = "DQN1_3_3term"
+    experiment_name = "DQN2_0"
     fullpath = f"experiments/{Algorithm_name}/{experiment_name}"
     writer = SummaryWriter(log_dir=f'runs/{Algorithm_name}/{experiment_name}')
 

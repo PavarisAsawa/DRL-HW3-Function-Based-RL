@@ -45,17 +45,10 @@ class DQN_network(nn.Module):
             Tensor: Q-value estimates for each action.
         """
         # ========= put your code here ========= #
-        val = x
-        # input layer to hidden
-        val = F.relu(self.fc1(val))
+        val = F.relu(self.fc1(x))
         val = self.dropout(val)
-        
-        # hidden layer to output
-        val = F.relu(self.fc2(val))
-        val = self.dropout(val)
-        
-        # output layer
-        return val
+        q_values = self.fc2(val)
+        return q_values
         # ====================================== #
 
 class DQN(BaseAlgorithm):

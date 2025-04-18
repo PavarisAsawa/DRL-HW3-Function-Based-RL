@@ -180,13 +180,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "PPO"
-    Experiment_name = "PPO_01"  
+    Experiment_name = "PPO_08_3term64"  
     episode = 9999
     # q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
     # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
     # agent.load_w(full_path, q_value_file)
     fullpath = f"experiments/{Algorithm_name}/{Experiment_name}"
-    agent.load_net_weights(path=fullpath,filename="weight_1500")
+    agent.load_net_weights(path=fullpath,filename="weight")
 
     # reset environment
     obs, _ = env.reset()

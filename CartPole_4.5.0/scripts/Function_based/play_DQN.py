@@ -131,7 +131,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     num_of_action: int = 7
     action_range: list = [-25, 25]
     n_observations: int = 4
-    hidden_dim: int = 128
+    hidden_dim: int = 64
     dropout: float = 0.0
     learning_rate: float = 0.001
     tau: float = 0.005
@@ -176,13 +176,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     task_name = str(args_cli.task).split('-')[0]  # Stabilize, SwingUp
     Algorithm_name = "DQN"
-    Experiment_name = "DQN_dump"  
+    Experiment_name = "DQN2_0"  
     episode = 9999
     # q_value_file = f"{Algorithm_name}_{episode}_{num_of_action}_{action_range[1]}.json"
     # full_path = os.path.join(f"w/{task_name}", Algorithm_name)
     # agent.load_w(full_path, q_value_file)
     fullpath = f"experiments/{Algorithm_name}/{Experiment_name}"
-    agent.load_net_weights(path=fullpath,filename="weight_1000")
+    agent.load_net_weights(path=fullpath,filename="weight_1400")
 
     # reset environment
     obs, _ = env.reset()

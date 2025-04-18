@@ -47,15 +47,8 @@ class MC_REINFORCE_network(nn.Module):
         # ========= put your code here ========= #
         # input layer to hidden
         x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        
-        # hidden layer to softmax
-        x = F.relu(self.fc2(x))
-        x = self.dropout(x)
-        
-        # softmax to output
-        x = self.softmax(x)
-        return x
+        logits = self.fc2(x)
+        return self.softmax(logits)
         # ====================================== #
 
 class MC_REINFORCE(BaseAlgorithm):
@@ -96,7 +89,6 @@ class MC_REINFORCE(BaseAlgorithm):
         # Experiment with different values and configurations to see how they affect the training process.
         # Remember to document any changes you make and analyze their impact on the agent's performance.
 
-        pass
         # ====================================== #
 
         super(MC_REINFORCE, self).__init__(
@@ -128,8 +120,8 @@ class MC_REINFORCE(BaseAlgorithm):
         for r in reversed(rewards):
             stepwise_return = stepwise_return*self.discount_factor + r
             stepwise_return_arr.append(stepwise_return)
-        tensor_norm = F.normalize(input=torch.tensor(list(reversed(stepwise_return_arr))),dim=0)
-        return tensor_norm.tolist() # > tensor([-0.1740, -0.1021, 0.3525,  0.4109,  0.4675,  0.5201])
+        returns = torch.tensor(list(reversed(stepwise_return_arr)),dtype=torch.float,device=self.device)
+        return returns # > tensor([-0.1740, -0.1021, 0.3525,  0.4109,  0.4675,  0.5201])
 
 
     def generate_trajectory(self, env):
@@ -194,8 +186,7 @@ class MC_REINFORCE(BaseAlgorithm):
 
         # ===== Stack log_prob_actions &  stepwise_returns ===== #
         stepwise_returns = self.calculate_stepwise_returns(rewards=reward_hist)
-        loss = self.calculate_loss(stepwise_returns=stepwise_returns , log_prob_actions=log_prob_action_hist).item()
-        self.training_error.append(loss)
+ 
         self.episode_durations.append(timestep)
         self.rewards.append(cumulative_reward)
         return (cumulative_reward , stepwise_returns , log_prob_action_hist , state_hist)
@@ -210,12 +201,10 @@ class MC_REINFORCE(BaseAlgorithm):
         Returns:
             Tensor: Computed loss.
         """
-        loss = 0
-        # สมมุติว่า log_prob_actions กับ stepwise_returns มีความสัมพันธ์ 1-to-1
-        for t in range(len(log_prob_actions)):
-            loss += -(log_prob_actions[t] * stepwise_returns[t])
-            # loss += -sum(log_prob_actions[t]*stepwise_returns[t])
-        loss = loss/len(stepwise_returns)
+        log_probs = torch.stack(log_prob_actions).flatten()
+        # print(log_probs.shape)
+        # loss = -torch.sum((log_probs * stepwise_returns))
+        loss = -(log_probs * stepwise_returns).mean()
         return loss # > tensor(2.5966) : Scalar
     
     def update_policy(self, stepwise_returns, log_prob_actions):
@@ -229,7 +218,7 @@ class MC_REINFORCE(BaseAlgorithm):
         Returns:
             float: Loss value after the update.
         """
-        loss = self.calculate_loss(stepwise_returns=stepwise_returns , log_prob_actions=log_prob_actions).unsqueeze(0) # get tensor loss value
+        loss = self.calculate_loss(stepwise_returns=stepwise_returns , log_prob_actions=log_prob_actions) # get tensor loss value
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -246,9 +235,10 @@ class MC_REINFORCE(BaseAlgorithm):
             Tuple: (episode_return, loss, trajectory)
         """
         # ========= put your code here ========= #
-        self.policy_net.train()
+        # self.policy_net.train()
         episode_return, stepwise_returns, log_prob_actions, trajectory = self.generate_trajectory(env)
         loss = self.update_policy(stepwise_returns, log_prob_actions)
+        self.training_error.append(loss)
         return episode_return, loss, trajectory
         # ====================================== #
 
